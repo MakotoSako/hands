@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI手相占い - Mystic Palm Reader</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Shippori Mincho & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Shippori+Mincho:wght@500;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['"Shippori Mincho"', 'serif'],
+                    },
+                    colors: {
+                        mystic: {
+                            950: '#0d0714',
+                            900: '#160d24',
+                            800: '#24153b',
+                            700: '#362057',
+                            gold: '#d4af37',
+                            goldLight: '#f3e5ab',
+                            goldDark: '#aa8212'
+                        }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'scan': 'scan 2.5s ease-in-out infinite',
+                        'fade-in': 'fadeIn 0.6s ease-out forwards',
+                    },
+                    keyframes: {
+                        scan: {
+                            '0%, 100%': { top: '12%' },
+                            '50%': { top: '86%' },
+                        },
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(12px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .gold-glow {
+            box-shadow: 0 0 25px rgba(212, 175, 55, 0.25);
+        }
+        .mirror-video {
+            transform: scaleX(-1);
+        }
+    </style>
+</head>
+<body class="bg-mystic-950 text-slate-100 font-sans min-h-screen flex flex-col selection:bg-mystic-gold selection:text-mystic-950">
+
+    <!-- ヘッダー -->
+    <header class="w-full border-b border-mystic-gold/20 bg-mystic-900/80 backdrop-blur-md sticky top-0 z-30">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-2.5">
+                <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-mystic-goldDark to-mystic-gold flex items-center justify-center text-mystic-950 shadow-lg">
+                    <i class="fa-solid fa-hand-sparkles text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-serif font-bold text-lg sm:text-xl tracking-wider text-mystic-goldLight leading-tight">
+                        AI手相占い
+                    </h1>
+                    <p class="text-[10px] sm:text-xs text-purple-300/70 tracking-widest">MYSTIC PALM READER</p>
+                </div>
+            </div>
+
+            <!-- 左手・右手 切り替えトグル -->
+            <div class="flex items-center bg-mystic-950/90 p-1 rounded-full border border-mystic-gold/30">
+                <button id="btn-left-hand" onclick="setHand('left')" class="px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-300 bg-mystic-gold text-mystic-950 shadow">
+                    左手 <span class="hidden sm:inline text-[10px] opacity-80">(先天運)</span>
+                </button>
+                <button id="btn-right-hand" onclick="setHand('right')" class="px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-300 text-purple-200 hover:text-white">
+                    右手 <span class="hidden sm:inline text-[10px] opacity-80">(後天運)</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- メインコンテンツ -->
+    <main class="flex-1 w-full max-w-4xl mx-auto px-4 py-6 flex flex-col items-center">
+
+        <!-- カスタムメッセージボックス（alert代替） -->
+        <div id="message-box" class="hidden w-full max-w-lg mb-4 p-4 rounded-xl bg-red-950/90 border border-red-500/50 text-red-100 text-sm flex items-start justify-between gap-3 shadow-lg">
+            <div class="flex items-start gap-2.5">
+                <i class="fa-solid fa-circle-exclamation text-red-400 mt-0.5"></i>
+                <span id="message-text">エラーメッセージ</span>
+            </div>
+            <button onclick="hideMessage()" class="text-red-300 hover:text-white">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- ステップ1: カメラ撮影エリア -->
+        <section id="camera-section" class="w-full max-w-lg flex flex-col items-center">
+            <div class="text-center mb-4">
+                <p id="hand-instruction" class="text-sm sm:text-base text-purple-200">
+                    <span class="font-bold text-mystic-gold">「左手」</span>の手のひら（親指が右）を枠に合わせてください
+                </p>
+                <p class="text-xs text-purple-300/70 mt-1">
+                    明るい場所でカメラに近づけると、シワまで鮮明に読み取れます
+                </p>
+            </div>
+
+            <!-- カメラビューポート枠 -->
+            <div class="relative w-full aspect-[3/4] max-h-[520px] bg-mystic-900 rounded-2xl overflow-hidden border-2 border-mystic-gold/40 gold-glow flex items-center justify-center">
+                
+                <!-- ライブカメラ映像（PC/インカメラ基本のため鏡像表示） -->
+                <video id="video-preview" autoplay playsinline muted class="hidden w-full h-full object-cover mirror-video"></video>
+                
+                <!-- デモモード用Canvas -->
+                <canvas id="preview-canvas" class="hidden w-full h-full object-cover"></canvas>
+
+                <!-- 初期プレースホルダー（カメラ起動前） -->
+                <div id="camera-placeholder" class="flex flex-col items-center justify-center p-6 text-center z-10">
+                    <div class="w-20 h-20 rounded-full bg-mystic-800/80 border border-mystic-gold/30 flex items-center justify-center text-mystic-gold mb-4 shadow-inner">
+                        <i class="fa-solid fa-camera text-3xl"></i>
+                    </div>
+                    <h2 class="font-serif text-lg sm:text-xl font-bold text-mystic-goldLight mb-2">
+                        手のひらをかざして自動鑑定
+                    </h2>
+                    <p class="text-xs sm:text-sm text-purple-200/80 mb-6 max-w-xs leading-relaxed">
+                        5本の指を大きく広げてガイド枠に合わせると、静止を検知して自動で撮影・鑑定します。
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-3 w-full max-w-xs">
+                        <button onclick="startCamera()" class="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-mystic-goldDark via-mystic-gold to-mystic-goldDark text-mystic-950 font-bold text-sm shadow-lg hover:brightness-110 transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-video"></i> カメラを起動
+                        </button>
+                        <button onclick="startDemoMode()" class="flex-1 py-3 px-4 rounded-xl bg-mystic-800 hover:bg-mystic-700 text-mystic-goldLight border border-mystic-gold/30 font-medium text-sm transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> サンプルで試す
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 手のひらガイド枠（SVGオーバーレイ：5本指を大きく広げた手形） -->
+                <div id="palm-guide-overlay" class="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-3 hidden">
+                    <!-- スキャンアニメーションライン（解析中のみ表示） -->
+                    <div id="scan-line" class="hidden absolute left-4 right-4 h-0.5 bg-gradient-to-r from-transparent via-mystic-gold to-transparent shadow-[0_0_15px_#d4af37] animate-scan z-20"></div>
+
+                    <!-- 自動撮影ステータスバッジ -->
+                    <div id="auto-capture-status" class="absolute top-3 left-3 px-3 py-1.5 rounded-full bg-mystic-950/85 border border-mystic-gold/40 text-xs text-mystic-goldLight flex items-center gap-2 backdrop-blur-sm z-20 transition-all">
+                        <span id="auto-status-dot" class="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></span>
+                        <span id="auto-status-text">枠内に大きく手を広げてください</span>
+                    </div>
+
+                    <!-- カウントダウンリング（静止検知時に表示） -->
+                    <div id="countdown-overlay" class="hidden absolute inset-0 flex items-center justify-center z-30">
+                        <div class="w-24 h-24 rounded-full bg-mystic-950/80 border-2 border-mystic-gold flex flex-col items-center justify-center shadow-[0_0_30px_rgba(212,175,55,0.6)]">
+                            <span id="countdown-number" class="font-serif text-4xl font-bold text-mystic-gold">2</span>
+                            <span class="text-[10px] text-mystic-goldLight tracking-wider">そのまま静止</span>
+                        </div>
+                    </div>
+
+                    <!-- 5本指を大きく広げた手のひら輪郭と主要3線 SVG（ベース形状：親指が左側＝右手） -->
+                    <svg id="palm-svg" viewBox="0 0 340 380" class="w-full h-full max-w-[320px] max-h-[360px] opacity-85 transition-all duration-300">
+                        <defs>
+                            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="3" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                        </defs>
+                        
+                        <!-- 5本指を大きくパーに広げた手形（ベース：左に親指＝右手） -->
+                        <path id="palm-outline-path" d="M 118 355 
+                                 L 112 292 
+                                 C 85 275, 42 248, 22 222 
+                                 C 12 208, 26 192, 42 204 
+                                 L 96 238 
+                                 L 72 118 
+                                 C 68 98, 92 94, 97 114 
+                                 L 124 202 
+                                 L 132 76 
+                                 C 133 55, 159 55, 160 76 
+                                 L 164 196 
+                                 L 194 86 
+                                 C 199 66, 224 72, 219 92 
+                                 L 198 205 
+                                 L 246 124 
+                                 C 256 106, 278 118, 268 136 
+                                 L 224 235 
+                                 C 226 275, 216 315, 206 355 Z" 
+                              fill="rgba(212, 175, 55, 0.06)" 
+                              stroke="#d4af37" 
+                              stroke-width="2.5" 
+                              stroke-dasharray="6 4"
+                              filter="url(#glow)" />
+
+                        <!-- 感情線（小指の下から人差し指方面へ） -->
+                        <path d="M 218 228 Q 172 226 124 206" 
+                              fill="none" stroke="#f472b6" stroke-width="2" stroke-linecap="round" opacity="0.85" />
+                        <text x="172" y="216" fill="#f472b6" font-size="10" font-family="sans-serif" opacity="0.95">感情線</text>
+
+                        <!-- 頭脳線（人差し指と親指の間から小指方面へ） -->
+                        <path d="M 104 238 Q 158 245 208 262" 
+                              fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" opacity="0.85" />
+                        <text x="155" y="241" fill="#60a5fa" font-size="10" font-family="sans-serif" opacity="0.95">頭脳線</text>
+
+                        <!-- 生命線（人差し指と親指の間から手首へ弧を描く） -->
+                        <path d="M 104 238 Q 148 275 138 335" 
+                              fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" opacity="0.85" />
+                        <text x="108" y="302" fill="#34d399" font-size="10" font-family="sans-serif" opacity="0.95">生命線</text>
+                    </svg>
+                </div>
+
+                <!-- カメラ切り替えボタン（必要時のみ外側カメラへ切替可能） -->
+                <button id="btn-switch-camera" onclick="switchCamera()" title="カメラ切替" class="hidden absolute top-3 right-3 px-3 py-1.5 rounded-full bg-mystic-950/80 border border-mystic-gold/50 text-mystic-goldLight hover:bg-mystic-800 flex items-center gap-1.5 text-xs font-medium backdrop-blur-sm transition z-20 shadow-lg">
+                    <i class="fa-solid fa-camera-rotate"></i>
+                    <span id="camera-mode-label">内側カメラ</span>
+                </button>
+
+                <!-- デモモードバッジ -->
+                <div id="demo-badge" class="hidden absolute top-12 left-3 px-3 py-1 rounded-full bg-purple-900/80 border border-purple-400/40 text-purple-200 text-xs font-medium backdrop-blur-sm z-20">
+                    <i class="fa-solid fa-flask mr-1"></i>サンプル手相モード
+                </div>
+            </div>
+
+            <!-- アクションボタンエリア（手動撮影＆自動撮影トグル） -->
+            <div id="capture-controls" class="hidden w-full mt-4 flex flex-col gap-2.5">
+                <div class="flex items-center justify-between px-3 py-2 rounded-xl bg-mystic-900/80 border border-mystic-gold/25 text-xs">
+                    <span class="text-purple-200 flex items-center gap-2">
+                        <i class="fa-solid fa-hand-pointer text-mystic-gold"></i>
+                        ガイド枠に手を合わせると自動撮影
+                    </span>
+                    <button id="btn-toggle-auto" onclick="toggleAutoCapture()" class="px-3 py-1 rounded-full bg-mystic-gold text-mystic-950 font-bold transition">
+                        自動撮影 ON
+                    </button>
+                </div>
+                <button id="btn-capture" onclick="captureAndAnalyze()" class="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-mystic-goldDark via-mystic-gold to-mystic-goldDark text-mystic-950 font-serif font-bold text-base shadow-[0_0_20px_rgba(212,175,55,0.35)] hover:brightness-110 active:scale-[0.99] transition flex items-center justify-center gap-2.5">
+                    <i class="fa-solid fa-camera"></i> 今すぐ手動で撮影する
+                </button>
+            </div>
+        </section>
+
+        <!-- ローディング表示（AI解析中） -->
+        <section id="loading-section" class="hidden w-full max-w-lg py-12 flex flex-col items-center text-center animate-fade-in">
+            <div class="relative w-24 h-24 mb-6">
+                <div class="absolute inset-0 rounded-full border-4 border-mystic-800"></div>
+                <div class="absolute inset-0 rounded-full border-4 border-t-mystic-gold border-r-mystic-gold/50 border-b-transparent border-l-transparent animate-spin"></div>
+                <div class="absolute inset-0 flex items-center justify-center text-mystic-gold">
+                    <i class="fa-solid fa-sparkles text-2xl animate-pulse"></i>
+                </div>
+            </div>
+            <h3 class="font-serif text-xl text-mystic-goldLight mb-2">星の導きと掌の線を読み解いています...</h3>
+            <p class="text-sm text-purple-300/80 max-w-xs">
+                AI鑑定士があなたの生命線・頭脳線・感情線の微細な流れを分析しています。少々お待ちください。
+            </p>
+        </section>
+
+        <!-- ステップ2: 占い結果表示エリア -->
+        <section id="result-section" class="hidden w-full max-w-2xl flex flex-col gap-6 animate-fade-in">
+            
+            <!-- 結果ヘッダー＆キャプチャサムネイル -->
+            <div class="bg-mystic-900/90 border border-mystic-gold/40 rounded-2xl p-5 sm:p-6 shadow-xl backdrop-blur-md flex flex-col sm:flex-row items-center gap-5">
+                <div class="relative w-28 h-36 sm:w-32 sm:h-40 rounded-xl overflow-hidden border border-mystic-gold/50 shrink-0 shadow-lg">
+                    <img id="captured-thumbnail" src="" alt="撮影した手相" class="w-full h-full object-cover">
+                    <div id="result-hand-badge" class="absolute bottom-0 inset-x-0 bg-mystic-950/80 text-mystic-gold text-[11px] font-bold text-center py-1">
+                        左手（先天運）
+                    </div>
+                </div>
+                <div class="flex-1 text-center sm:text-left">
+                    <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-mystic-gold/15 border border-mystic-gold/30 text-mystic-gold text-xs font-medium mb-2">
+                        <i class="fa-solid fa-star"></i> 鑑定完了
+                    </div>
+                    <h2 id="result-catchphrase" class="font-serif text-xl sm:text-2xl font-bold text-mystic-goldLight leading-snug mb-2">
+                        <!-- AIが生成するキャッチコピー -->
+                    </h2>
+                    <p id="result-overall" class="text-sm text-purple-100/90 leading-relaxed">
+                        <!-- 総合運 -->
+                    </p>
+                </div>
+            </div>
+
+            <!-- 主要3線の詳細カード -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- 生命線 -->
+                <div class="bg-mystic-900/80 border border-emerald-500/30 rounded-2xl p-5 shadow-lg flex flex-col">
+                    <div class="flex items-center gap-2.5 mb-3">
+                        <span class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                            <i class="fa-solid fa-heart-pulse"></i>
+                        </span>
+                        <div>
+                            <h3 class="font-serif font-bold text-emerald-300 text-base">生命線</h3>
+                            <p class="text-[10px] text-emerald-400/70">健康・バイタリティ</p>
+                        </div>
+                    </div>
+                    <p id="result-life" class="text-sm text-slate-200 leading-relaxed flex-grow">
+                        <!-- 生命線の結果 -->
+                    </p>
+                </div>
+
+                <!-- 頭脳線 -->
+                <div class="bg-mystic-900/80 border border-blue-500/30 rounded-2xl p-5 shadow-lg flex flex-col">
+                    <div class="flex items-center gap-2.5 mb-3">
+                        <span class="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                            <i class="fa-solid fa-brain"></i>
+                        </span>
+                        <div>
+                            <h3 class="font-serif font-bold text-blue-300 text-base">頭脳線</h3>
+                            <p class="text-[10px] text-blue-400/70">才能・思考・仕事運</p>
+                        </div>
+                    </div>
+                    <p id="result-head" class="text-sm text-slate-200 leading-relaxed flex-grow">
+                        <!-- 頭脳線の結果 -->
+                    </p>
+                </div>
+
+                <!-- 感情線 -->
+                <div class="bg-mystic-900/80 border border-pink-500/30 rounded-2xl p-5 shadow-lg flex flex-col">
+                    <div class="flex items-center gap-2.5 mb-3">
+                        <span class="w-8 h-8 rounded-lg bg-pink-500/20 text-pink-400 flex items-center justify-center">
+                            <i class="fa-solid fa-heart"></i>
+                        </span>
+                        <div>
+                            <h3 class="font-serif font-bold text-pink-300 text-base">感情線</h3>
+                            <p class="text-[10px] text-pink-400/70">恋愛・対人・感受性</p>
+                        </div>
+                    </div>
+                    <p id="result-heart" class="text-sm text-slate-200 leading-relaxed flex-grow">
+                        <!-- 感情線の結果 -->
+                    </p>
+                </div>
+            </div>
+
+            <!-- ラッキーアドバイス -->
+            <div class="bg-gradient-to-r from-mystic-800/90 via-mystic-900/90 to-mystic-800/90 border border-mystic-gold/50 rounded-2xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
+                <div class="absolute -right-6 -bottom-6 text-mystic-gold/10 text-8xl pointer-events-none">
+                    <i class="fa-solid fa-compass"></i>
+                </div>
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+                    <div>
+                        <h3 class="font-serif font-bold text-mystic-gold text-base flex items-center gap-2 mb-1.5">
+                            <i class="fa-solid fa-key"></i> 開運・ラッキーアドバイス
+                        </h3>
+                        <p id="result-advice" class="text-sm text-mystic-goldLight/95 leading-relaxed">
+                            <!-- アドバイス -->
+                        </p>
+                    </div>
+                    <div class="shrink-0 bg-mystic-950/70 border border-mystic-gold/30 rounded-xl px-4 py-2.5 text-center">
+                        <span class="block text-[10px] text-purple-300">ラッキーカラー / アイテム</span>
+                        <span id="result-lucky-item" class="font-serif font-bold text-sm text-mystic-gold">
+                            <!-- ラッキーアイテム -->
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- もう一度占うボタン -->
+            <div class="flex justify-center pt-2 pb-6">
+                <button onclick="resetApp()" class="py-3 px-8 rounded-xl bg-mystic-800 hover:bg-mystic-700 text-mystic-goldLight border border-mystic-gold/40 font-medium text-sm transition flex items-center gap-2 shadow-lg">
+                    <i class="fa-solid fa-rotate-left"></i> 別の手相を撮影して占う
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- フッター -->
+    <footer class="w-full py-4 px-4 border-t border-mystic-gold/10 text-center text-xs text-purple-400/60">
+        <p>※撮影された画像はAIによる手相解析のみに使用され、サーバーに保存されることはありません。</p>
+    </footer>
+
+    <!-- アプリケーションロジック -->
+    <script>
+        // --- 状態管理変数 ---
+        let currentHand = 'left'; // 'left' または 'right'
+        let stream = null;
+        let facingMode = 'user'; // PCベース・スマホ内側カメラを基本にする
+        let isDemoMode = false;
+        let isMirrored = true;
+
+        // 自動撮影（ハンズフリー検知）用変数
+        let isAutoCaptureEnabled = true;
+        let autoDetectTimer = null;
+        let prevFrameData = null;
+        let stableFrames = 0;
+        let isAnalyzing = false;
+
+        // --- DOM要素の取得 ---
+        const videoEl = document.getElementById('video-preview');
+        const canvasEl = document.getElementById('preview-canvas');
+        const placeholderEl = document.getElementById('camera-placeholder');
+        const guideOverlayEl = document.getElementById('palm-guide-overlay');
+        const palmSvgEl = document.getElementById('palm-svg');
+        const palmOutlinePathEl = document.getElementById('palm-outline-path');
+        const captureControlsEl = document.getElementById('capture-controls');
+        const btnSwitchCamera = document.getElementById('btn-switch-camera');
+        const demoBadgeEl = document.getElementById('demo-badge');
+        const scanLineEl = document.getElementById('scan-line');
+
+        const cameraSection = document.getElementById('camera-section');
+        const loadingSection = document.getElementById('loading-section');
+        const resultSection = document.getElementById('result-section');
+
+        // --- メッセージ表示制御（alertの代替） ---
+        function showMessage(text) {
+            const box = document.getElementById('message-box');
+            const msgText = document.getElementById('message-text');
+            msgText.textContent = text;
+            box.classList.remove('hidden');
+        }
+
+        function hideMessage() {
+            document.getElementById('message-box').classList.add('hidden');
+        }
+
+        // --- 右手・左手の切り替え ---
+        function setHand(hand) {
+            currentHand = hand;
+            const btnLeft = document.getElementById('btn-left-hand');
+            const btnRight = document.getElementById('btn-right-hand');
+            const instruction = document.getElementById('hand-instruction');
+
+            if (hand === 'left') {
+                btnLeft.className = "px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-300 bg-mystic-gold text-mystic-950 shadow";
+                btnRight.className = "px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-300 text-purple-200 hover:text-white";
+                instruction.innerHTML = `<span class="font-bold text-mystic-gold">「左手」</span>の5本指を大きく広げて（親指が右）枠に合わせてください`;
+            } else {
+                btnRight.className = "px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-300 bg-mystic-gold text-mystic-950 shadow";
+                btnLeft.className = "px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-300 text-purple-200 hover:text-white";
+                instruction.innerHTML = `<span class="font-bold text-mystic-gold">「右手」</span>の5本指を大きく広げて（親指が左）枠に合わせてください`;
+            }
+
+            updatePalmGuideOrientation();
+            resetAutoDetectState();
+
+            // デモモード中の場合はサンプル手相も再描画
+            if (isDemoMode) {
+                drawSamplePalmOnCanvas();
+            }
+        }
+
+        // --- ガイド枠の向き更新（右手＝親指が左、左手＝親指が右） ---
+        function updatePalmGuideOrientation() {
+            if (currentHand === 'right') {
+                palmSvgEl.style.transform = "scaleX(1)";
+                palmSvgEl.querySelectorAll('text').forEach(t => {
+                    t.removeAttribute('transform');
+                });
+            } else {
+                palmSvgEl.style.transform = "scaleX(-1)";
+                palmSvgEl.querySelectorAll('text').forEach(t => {
+                    const x = parseFloat(t.getAttribute('x'));
+                    t.setAttribute('transform', `translate(${x * 2 + 28}, 0) scale(-1, 1)`);
+                });
+            }
+        }
+
+        // --- 自動撮影のON/OFF切り替え ---
+        function toggleAutoCapture() {
+            isAutoCaptureEnabled = !isAutoCaptureEnabled;
+            const btn = document.getElementById('btn-toggle-auto');
+            const statusBox = document.getElementById('auto-capture-status');
+
+            if (isAutoCaptureEnabled) {
+                btn.textContent = "自動撮影 ON";
+                btn.className = "px-3 py-1 rounded-full bg-mystic-gold text-mystic-950 font-bold transition";
+                statusBox.classList.remove('hidden');
+                resetAutoDetectState();
+                startAutoDetectionLoop();
+            } else {
+                btn.textContent = "自動撮影 OFF";
+                btn.className = "px-3 py-1 rounded-full bg-mystic-800 text-purple-300 border border-purple-500/40 font-medium transition";
+                statusBox.classList.add('hidden');
+                stopAutoDetectionLoop();
+            }
+        }
+
+        function resetAutoDetectState() {
+            stableFrames = 0;
+            prevFrameData = null;
+            document.getElementById('countdown-overlay').classList.add('hidden');
+            palmOutlinePathEl.setAttribute('stroke', '#d4af37');
+            palmOutlinePathEl.setAttribute('fill', 'rgba(212, 175, 55, 0.06)');
+        }
+
+        // --- ガイド枠内の手のひら検知＆自動撮影ループ ---
+        function startAutoDetectionLoop() {
+            stopAutoDetectionLoop();
+            if (!isAutoCaptureEnabled || isDemoMode) return;
+
+            const detectCanvas = document.createElement('canvas');
+            detectCanvas.width = 64;
+            detectCanvas.height = 80;
+            const dCtx = detectCanvas.getContext('2d', { willReadFrequently: true });
+
+            autoDetectTimer = setInterval(() => {
+                if (!isAutoCaptureEnabled || isAnalyzing || isDemoMode || !videoEl.videoWidth) return;
+
+                dCtx.drawImage(videoEl, 0, 0, 64, 80);
+                const frame = dCtx.getImageData(0, 0, 64, 80).data;
+
+                // 中央の手のひら領域（x: 16..48, y: 18..68）と背景端（左上・右上）の差・肌色率・フレーム間静止度を計算
+                let skinPixels = 0;
+                let centerSampleCount = 0;
+                let motionDiff = 0;
+
+                for (let y = 18; y < 68; y++) {
+                    for (let x = 16; x < 48; x++) {
+                        const idx = (y * 64 + x) * 4;
+                        const r = frame[idx];
+                        const g = frame[idx + 1];
+                        const b = frame[idx + 2];
+
+                        centerSampleCount++;
+
+                        // 肌色・明るい手のひら領域の簡易判定（照明下での皮膚トーン広域カバー）
+                        const isSkinLike = (r > 75 && g > 40 && b > 25 && r > g && r > b && (r - Math.min(g, b)) > 12);
+                        if (isSkinLike) {
+                            skinPixels++;
+                        }
+
+                        if (prevFrameData) {
+                            motionDiff += Math.abs(r - prevFrameData[idx]) + Math.abs(g - prevFrameData[idx + 1]);
+                        }
+                    }
+                }
+
+                prevFrameData = new Uint8ClampedArray(frame);
+
+                const skinRatio = skinPixels / centerSampleCount;
+                const avgMotion = motionDiff / centerSampleCount;
+
+                const statusDot = document.getElementById('auto-status-dot');
+                const statusText = document.getElementById('auto-status-text');
+                const countdownOverlay = document.getElementById('countdown-overlay');
+                const countdownNum = document.getElementById('countdown-number');
+
+                // 枠内に手のひらが十分に入っている（32%以上が手の色調）場合
+                if (skinRatio > 0.32) {
+                    palmOutlinePathEl.setAttribute('stroke', '#34d399');
+                    palmOutlinePathEl.setAttribute('fill', 'rgba(52, 211, 153, 0.12)');
+
+                    // 手がピタッと静止している判定（動きが小さい）
+                    if (avgMotion < 14) {
+                        stableFrames++;
+                        statusDot.className = "w-2 h-2 rounded-full bg-emerald-400 animate-ping";
+                        statusText.textContent = "手のひらを認識！そのまま静止してください...";
+
+                        if (stableFrames >= 3) {
+                            countdownOverlay.classList.remove('hidden');
+                            const remaining = Math.max(1, Math.ceil((8 - stableFrames) / 3));
+                            countdownNum.textContent = remaining;
+                        }
+
+                        // 約1.6秒（8フレーム × 200ms）静止したら自動シャッター
+                        if (stableFrames >= 8) {
+                            stopAutoDetectionLoop();
+                            countdownOverlay.classList.add('hidden');
+                            captureAndAnalyze();
+                        }
+                    } else {
+                        // 手が動いている間はカウントを少し戻す
+                        stableFrames = Math.max(0, stableFrames - 1);
+                        countdownOverlay.classList.add('hidden');
+                        statusDot.className = "w-2 h-2 rounded-full bg-amber-400";
+                        statusText.textContent = "手が動いています。枠に合わせて止めてください";
+                    }
+                } else {
+                    // 枠内に手がない状態
+                    stableFrames = 0;
+                    countdownOverlay.classList.add('hidden');
+                    palmOutlinePathEl.setAttribute('stroke', '#d4af37');
+                    palmOutlinePathEl.setAttribute('fill', 'rgba(212, 175, 55, 0.06)');
+                    statusDot.className = "w-2 h-2 rounded-full bg-purple-400 animate-pulse";
+                    statusText.textContent = "枠内に大きく手を広げてください";
+                }
+            }, 200);
+        }
+
+        function stopAutoDetectionLoop() {
+            if (autoDetectTimer) {
+                clearInterval(autoDetectTimer);
+                autoDetectTimer = null;
+            }
+        }
+
+        // --- Webカメラの起動（PC/スマホ内側カメラを基本） ---
+        async function startCamera() {
+            hideMessage();
+            isDemoMode = false;
+            demoBadgeEl.classList.add('hidden');
+            stopAutoDetectionLoop();
+
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+
+            try {
+                const constraints = {
+                    video: {
+                        facingMode: { ideal: facingMode },
+                        width: { ideal: 1280 },
+                        height: { ideal: 960 }
+                    },
+                    audio: false
+                };
+
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoEl.srcObject = stream;
+                await videoEl.play();
+
+                const cameraLabelEl = document.getElementById('camera-mode-label');
+
+                if (facingMode === 'user') {
+                    videoEl.classList.add('mirror-video');
+                    isMirrored = true;
+                    cameraLabelEl.textContent = '内側カメラ';
+                } else {
+                    videoEl.classList.remove('mirror-video');
+                    isMirrored = false;
+                    cameraLabelEl.textContent = '外側カメラ';
+                }
+
+                updatePalmGuideOrientation();
+
+                // UIの表示切り替え
+                placeholderEl.classList.add('hidden');
+                canvasEl.classList.add('hidden');
+                videoEl.classList.remove('hidden');
+                guideOverlayEl.classList.remove('hidden');
+                captureControlsEl.classList.remove('hidden');
+                btnSwitchCamera.classList.remove('hidden');
+
+                if (isAutoCaptureEnabled) {
+                    document.getElementById('auto-capture-status').classList.remove('hidden');
+                    resetAutoDetectState();
+                    startAutoDetectionLoop();
+                }
+
+            } catch (err) {
+                console.warn("カメラアクセスエラー:", err);
+                showMessage("カメラを起動できませんでした（権限が拒否されたか、カメラが見つかりません）。「サンプルで試す」ボタンからデモ体験が可能です。");
+            }
+        }
+
+        // --- カメラの前後切り替え ---
+        function switchCamera() {
+            facingMode = (facingMode === 'user') ? 'environment' : 'user';
+            startCamera();
+        }
+
+        // --- サンプル画像（デモモード）の起動 ---
+        function startDemoMode() {
+            hideMessage();
+            isDemoMode = true;
+            isMirrored = false;
+            stopAutoDetectionLoop();
+
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+
+            updatePalmGuideOrientation();
+
+            placeholderEl.classList.add('hidden');
+            videoEl.classList.add('hidden');
+            btnSwitchCamera.classList.add('hidden');
+            document.getElementById('auto-capture-status').classList.add('hidden');
+            
+            canvasEl.classList.remove('hidden');
+            guideOverlayEl.classList.remove('hidden');
+            captureControlsEl.classList.remove('hidden');
+            demoBadgeEl.classList.remove('hidden');
+
+            drawSamplePalmOnCanvas();
+        }
+
+        // --- Canvasに5本指を大きく広げたサンプル手相イラストを描画 ---
+        function drawSamplePalmOnCanvas() {
+            canvasEl.width = 600;
+            canvasEl.height = 800;
+            const ctx = canvasEl.getContext('2d');
+
+            const bgGrad = ctx.createRadialGradient(300, 400, 50, 300, 400, 500);
+            bgGrad.addColorStop(0, '#2e1a47');
+            bgGrad.addColorStop(1, '#12091c');
+            ctx.fillStyle = bgGrad;
+            ctx.fillRect(0, 0, 600, 800);
+
+            ctx.save();
+            // 左手(left)の時は左右反転して親指を右にする
+            if (currentHand === 'left') {
+                ctx.translate(600, 0);
+                ctx.scale(-1, 1);
+            }
+
+            const skinGrad = ctx.createLinearGradient(120, 150, 480, 720);
+            skinGrad.addColorStop(0, '#f3cbb2');
+            skinGrad.addColorStop(0.5, '#e5b396');
+            skinGrad.addColorStop(1, '#c99375');
+
+            ctx.fillStyle = skinGrad;
+            ctx.shadowColor = 'rgba(0,0,0,0.5)';
+            ctx.shadowBlur = 25;
+
+            // 5本指を大きく広げた手形パス
+            ctx.beginPath();
+            ctx.moveTo(208, 745);
+            ctx.lineTo(198, 615);
+            ctx.bezierCurveTo(150, 580, 74, 522, 38, 468);
+            ctx.bezierCurveTo(22, 438, 46, 404, 74, 430);
+            ctx.lineTo(170, 500);
+            ctx.lineTo(127, 248);
+            ctx.bezierCurveTo(120, 206, 162, 198, 171, 240);
+            ctx.lineTo(218, 425);
+            ctx.lineTo(233, 160);
+            ctx.bezierCurveTo(235, 116, 280, 116, 282, 160);
+            ctx.lineTo(289, 412);
+            ctx.lineTo(342, 180);
+            ctx.bezierCurveTo(351, 138, 395, 150, 386, 192);
+            ctx.lineTo(349, 430);
+            ctx.lineTo(434, 260);
+            ctx.bezierCurveTo(451, 222, 490, 248, 472, 285);
+            ctx.lineTo(395, 492);
+            ctx.bezierCurveTo(398, 575, 380, 660, 362, 745);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.shadowBlur = 0;
+            ctx.lineCap = 'round';
+
+            // 感情線
+            ctx.strokeStyle = 'rgba(135, 78, 56, 0.72)';
+            ctx.lineWidth = 4.5;
+            ctx.beginPath();
+            ctx.moveTo(385, 478);
+            ctx.quadraticCurveTo(305, 472, 218, 432);
+            ctx.stroke();
+
+            // 頭脳線
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(184, 500);
+            ctx.quadraticCurveTo(280, 515, 368, 550);
+            ctx.stroke();
+
+            // 生命線
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.moveTo(184, 500);
+            ctx.quadraticCurveTo(260, 580, 242, 705);
+            ctx.stroke();
+
+            // 運命線（縦の補助線）
+            ctx.strokeStyle = 'rgba(135, 78, 56, 0.45)';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(285, 700);
+            ctx.lineTo(295, 480);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        // --- 撮影して解析を実行 ---
+        async function captureAndAnalyze() {
+            if (isAnalyzing) return;
+            isAnalyzing = true;
+            hideMessage();
+            stopAutoDetectionLoop();
+
+            // スキャン演出を表示
+            scanLineEl.classList.remove('hidden');
+
+            // 少し演出を見せてからキャプチャ処理へ
+            await new Promise(r => setTimeout(r, 700));
+
+            // 1. 静止画のキャプチャ（長辺768px以下に最適化）
+            const captureCanvas = document.createElement('canvas');
+            const ctx = captureCanvas.getContext('2d');
+            const maxDim = 768;
+
+            if (isDemoMode) {
+                captureCanvas.width = canvasEl.width;
+                captureCanvas.height = canvasEl.height;
+                ctx.drawImage(canvasEl, 0, 0);
+            } else {
+                const vw = videoEl.videoWidth || 640;
+                const vh = videoEl.videoHeight || 480;
+                const scale = Math.min(1, maxDim / Math.max(vw, vh));
+                captureCanvas.width = Math.round(vw * scale);
+                captureCanvas.height = Math.round(vh * scale);
+                
+                // インカメラ（鏡像）の場合は見た目通りの向きでキャプチャ
+                if (isMirrored) {
+                    ctx.translate(captureCanvas.width, 0);
+                    ctx.scale(-1, 1);
+                }
+                ctx.drawImage(videoEl, 0, 0, captureCanvas.width, captureCanvas.height);
+            }
+
+            const fullDataUrl = captureCanvas.toDataURL('image/jpeg', 0.85);
+            const base64Image = fullDataUrl.split(',')[1];
+
+            // サムネイルにセット
+            document.getElementById('captured-thumbnail').src = fullDataUrl;
+            document.getElementById('result-hand-badge').textContent = currentHand === 'left' ? '左手（先天運）' : '右手（後天運）';
+
+            // 2. ローディング画面へ切り替え
+            scanLineEl.classList.add('hidden');
+            cameraSection.classList.add('hidden');
+            loadingSection.classList.remove('hidden');
+
+            // 3. 解析の実行（内蔵掌紋画像解析エンジン＋APIキーがある場合はGemini AI）
+            try {
+                let readingResult = null;
+                const userApiKey = localStorage.getItem('gemini_palm_api_key') || '';
+
+                if (userApiKey.trim()) {
+                    try {
+                        readingResult = await callGeminiPalmReading(base64Image, currentHand, userApiKey.trim());
+                    } catch (apiErr) {
+                        console.warn("Gemini API呼び出しに失敗したため、内蔵解析エンジンへ切り替えます:", apiErr.message);
+                    }
+                }
+
+                // プレビュー環境（APIキーなし）またはAPI制限時は、撮影した実際の画像をピクセル解析して鑑定
+                if (!readingResult) {
+                    await new Promise(r => setTimeout(r, 900)); // 鑑定演出のウェイト
+                    readingResult = await analyzePalmLocallyFromImage(fullDataUrl, currentHand);
+                }
+                
+                if (readingResult.isPalmDetected === false) {
+                    isAnalyzing = false;
+                    loadingSection.classList.add('hidden');
+                    cameraSection.classList.remove('hidden');
+                    showMessage(readingResult.notDetectedReason || "手のひらがうまく認識できませんでした。明るい場所で、ガイド枠に合わせて手のひら全体を映してください。");
+                    if (isAutoCaptureEnabled && !isDemoMode) {
+                        resetAutoDetectState();
+                        startAutoDetectionLoop();
+                    }
+                    return;
+                }
+
+                isAnalyzing = false;
+                displayResult(readingResult);
+            } catch (error) {
+                console.error("鑑定エラー:", error);
+                isAnalyzing = false;
+                loadingSection.classList.add('hidden');
+                cameraSection.classList.remove('hidden');
+                showMessage(`手相の読み取り中にエラーが発生しました（${error.message || '解析エラー'}）。もう一度お試しください。`);
+                if (isAutoCaptureEnabled && !isDemoMode) {
+                    resetAutoDetectState();
+                    startAutoDetectionLoop();
+                }
+            }
+        }
+
+        // --- 内蔵・掌紋画像解析エンジン（撮影画像の明暗・シワの濃さ・方向性をCanvasで実測して鑑定） ---
+        function analyzePalmLocallyFromImage(dataUrl, handSide) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const w = 160;
+                    const h = 200;
+                    const c = document.createElement('canvas');
+                    c.width = w;
+                    c.height = h;
+                    const ctx = c.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+
+                    const imgData = ctx.getImageData(0, 0, w, h).data;
+                    const gray = new Float32Array(w * h);
+
+                    let skinCount = 0;
+                    let totalCenter = 0;
+                    let brightnessSum = 0;
+
+                    // 掌の中央領域（x: 40..120, y: 55..155）の輝度・肌色分布を解析
+                    for (let y = 0; y < h; y++) {
+                        for (let x = 0; x < w; x++) {
+                            const idx = (y * w + x) * 4;
+                            const r = imgData[idx];
+                            const g = imgData[idx + 1];
+                            const b = imgData[idx + 2];
+                            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                            gray[y * w + x] = lum;
+
+                            if (x >= 40 && x < 120 && y >= 55 && y < 155) {
+                                totalCenter++;
+                                brightnessSum += lum;
+                                if (r > 65 && g > 35 && b > 20 && r >= g && r > b) {
+                                    skinCount++;
+                                }
+                            }
+                        }
+                    }
+
+                    const skinRatio = skinCount / totalCenter;
+                    const avgBrightness = brightnessSum / totalCenter;
+
+                    // 手のひらが写っていない場合（極端に暗い、または肌色領域がほぼない）
+                    if (!isDemoMode && (avgBrightness < 35 || skinRatio < 0.22)) {
+                        resolve({
+                            isPalmDetected: false,
+                            notDetectedReason: "手のひらの輪郭やシワがうまく読み取れませんでした。明るい場所で、5本指を大きく広げてガイド枠に近づけてみてください。"
+                        });
+                        return;
+                    }
+
+                    // 掌の領域ごとのエッジ強度（シワの深さ・細かさ）を計測
+                    let upperCrease = 0; // 感情線エリア
+                    let midCrease = 0;   // 頭脳線エリア
+                    let lowerCrease = 0; // 生命線エリア
+                    let featureHash = 0;
+
+                    for (let y = 65; y < 145; y++) {
+                        for (let x = 48; x < 112; x++) {
+                            const i = y * w + x;
+                            // 縦横の輝度勾配（シワの溝を検出）
+                            const dx = Math.abs(gray[i + 1] - gray[i - 1]);
+                            const dy = Math.abs(gray[i + w] - gray[i - w]);
+                            const edge = dx + dy;
+
+                            if (edge > 18) {
+                                if (y < 92) upperCrease += edge;
+                                else if (y < 118) midCrease += edge;
+                                else lowerCrease += edge;
+                                featureHash = (featureHash * 31 + Math.round(edge)) % 100000;
+                            }
+                        }
+                    }
+
+                    const isLeft = handSide === 'left';
+                    const handTitle = isLeft ? '生まれ持った本質' : '現在の運気と行動力';
+
+                    const catchphrases = [
+                        "直感と知性が美しく調和する、大器晩成の開拓者",
+                        "周囲を温かく照らし、確かな信頼で未来を拓く太陽の相",
+                        "鋭い洞察力と粘り強さを兼ね備えた、孤高のクリエイター",
+                        "豊かな感受性と行動力でチャンスを掴み取る幸運の持ち主",
+                        "穏やかな包容力の奥に、揺るぎない情熱を秘めた賢者の相"
+                    ];
+
+                    const overallTemplates = [
+                        `${handTitle}を表す掌全体に、バランスの取れた美しい気の流れが刻まれています。特に主要な三線が互いに補い合うように伸びており、自分のペースを大切にしながら着実に理想を現実へと変えていく力強い運勢を示しています。`,
+                        `手のひらの肉付きとシワの深さから、非常にエネルギッシュで前向きな${handTitle}が読み取れます。変化を恐れずに一歩踏み出すことで、思いがけない良縁や新しいステージへの扉が次々と開かれていくでしょう。`,
+                        `きめ細やかな支線と芯の通った主線が共存しており、繊細な気配りと大胆な決断力を併せ持つ${handTitle}が表れています。これまでの経験が糧となり、これからさらに大きな実りを迎える時期に入っています。`
+                    ];
+
+                    const lifeReadings = lowerCrease > 4500
+                        ? "生命線が力強く張り出し、手首に向かって深く刻まれています。体力・精神力ともに充実しており、多少の困難も跳ね返す抜群の回復力とバイタリティを備えています。"
+                        : "穏やかで美しい弧を描く生命線です。無理をせず自分のリズムを整えることで本来の力を最大限に発揮でき、長く安定した健康運と充実した日々を歩めます。";
+
+                    const headReadings = midCrease > 4200
+                        ? "頭脳線がくっきりと長く伸びており、物事の本質を見抜く論理的思考力と高い集中力を持っています。専門分野や企画・分析などの仕事で独自の才能が花開きます。"
+                        : "柔軟でしなやかなカーブを描く頭脳線です。固定観念にとらわれない豊かな発想力と直感に優れており、クリエイティブな活動や人との対話から大きなヒントを得られます。";
+
+                    const heartReadings = upperCrease > 4200
+                        ? "感情線が人差し指の付け根に向かって深く伸びており、愛情深く誠実な人柄が表れています。大切な人との絆を何よりも重んじ、周囲から深い信頼を集める相です。"
+                        : "明るく伸びやかな感情線です。素直で風通しの良いコミュニケーションが得意で、恋愛でも対人関係でも自然体の魅力によって素敵なご縁を引き寄せます。";
+
+                    const advices = [
+                        "朝一番に深呼吸をして今日やりたいことを一つだけ決めると、持ち前の集中力がさらに高まり幸運を引き寄せます。",
+                        "直感で「面白そう」と感じたことには迷わず挑戦してみてください。新しい場所への外出が運気アップの鍵になります。",
+                        "身の回りの整理整頓や愛用している道具の手入れをすることで、思考がクリアになり良い知らせが舞い込みやすくなります。"
+                    ];
+
+                    const luckyItems = [
+                        "ロイヤルブルー / 万年筆・ノート",
+                        "シャンパンゴールド / 腕時計・アクセサリー",
+                        "エメラルドグリーン / 観葉植物・ハーブティー",
+                        "サンセットオレンジ / レザー小物・ハンカチ",
+                        "パールホワイト / ガラスのグラス・お気に入りのマグ"
+                    ];
+
+                    const idx1 = Math.abs(featureHash) % catchphrases.length;
+                    const idx2 = Math.abs(Math.round(upperCrease + midCrease)) % overallTemplates.length;
+                    const idx3 = Math.abs(Math.round(lowerCrease)) % advices.length;
+                    const idx4 = Math.abs(featureHash + (isLeft ? 1 : 2)) % luckyItems.length;
+
+                    resolve({
+                        isPalmDetected: true,
+                        catchphrase: catchphrases[idx1],
+                        overall: overallTemplates[idx2],
+                        lifeLine: lifeReadings,
+                        headLine: headReadings,
+                        heartLine: heartReadings,
+                        advice: advices[idx3],
+                        luckyItem: luckyItems[idx4]
+                    });
+                };
+                img.src = dataUrl;
+            });
+        }
+
+        // --- Gemini API へのリクエスト関数（gemini-3-flash-preview 専用） ---
+        // --- Gemini API へのリクエスト関数（APIキー設定時用） ---
+        async function callGeminiPalmReading(base64Data, handSide, apiKey) {
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+            const handLabel = handSide === 'left' ? '左手（生まれ持った才能や本質・先天運）' : '右手（現在の努力や環境・後天運）';
+
+            const promptText = `あなたは経験豊富で神秘的、かつ温かみのあるプロのAI手相鑑定士です。
+ユーザーから送られた「${handLabel}」の画像を注意深く観察し、まず「人間の手のひら（または手相のイラスト）が写っているか」を判定してください。
+
+【重要ルール】
+1. 手のひらが全く写っていない場合（壁、天井、顔、真っ暗な画面、ピンボケで手が判別不能など）は、isPalmDetected を false にし、notDetectedReason に丁寧な撮り直しの案内を入れてください。
+2. 手のひらが写っている場合は、isPalmDetected を true にし、実際の画像に見えるシワ（生命線・頭脳線・感情線の長さ、カーブ、濃さ、分岐など）を具体的に観察して鑑定結果を日本語で出力してください。`;
+
+            const payload = {
+                contents: [
+                    {
+                        role: "user",
+                        parts: [
+                            { text: promptText },
+                            {
+                                inlineData: {
+                                    mimeType: "image/jpeg",
+                                    data: base64Data
+                                }
+                            }
+                        ]
+                    }
+                ],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            isPalmDetected: { type: "BOOLEAN" },
+                            notDetectedReason: { type: "STRING" },
+                            catchphrase: { type: "STRING" },
+                            overall: { type: "STRING" },
+                            lifeLine: { type: "STRING" },
+                            headLine: { type: "STRING" },
+                            heartLine: { type: "STRING" },
+                            advice: { type: "STRING" },
+                            luckyItem: { type: "STRING" }
+                        },
+                        required: ["isPalmDetected", "catchphrase", "overall", "lifeLine", "headLine", "heartLine", "advice", "luckyItem"]
+                    }
+                }
+            };
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errBody = await response.text().catch(() => '');
+                throw new Error(`HTTP ${response.status} ${errBody ? '- ' + errBody.slice(0, 80) : ''}`);
+            }
+
+            const result = await response.json();
+            const textResponse = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+            
+            if (!textResponse) {
+                throw new Error("Empty response from model");
+            }
+
+            return JSON.parse(textResponse);
+        }
+
+        // --- 鑑定結果を画面に反映 ---
+        function displayResult(data) {
+            document.getElementById('result-catchphrase').textContent = `「${data.catchphrase}」`;
+            document.getElementById('result-overall').textContent = data.overall;
+            document.getElementById('result-life').textContent = data.lifeLine;
+            document.getElementById('result-head').textContent = data.headLine;
+            document.getElementById('result-heart').textContent = data.heartLine;
+            document.getElementById('result-advice').textContent = data.advice;
+            document.getElementById('result-lucky-item').textContent = data.luckyItem;
+
+            loadingSection.classList.add('hidden');
+            resultSection.classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // --- もう一度占う（初期画面へ戻る） ---
+        function resetApp() {
+            resultSection.classList.add('hidden');
+            cameraSection.classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (isAutoCaptureEnabled && !isDemoMode) {
+                resetAutoDetectState();
+                startAutoDetectionLoop();
+            }
+        }
+
+        // 初期ロード時にガイド枠の向き（デフォルト左手＝親指が右）を確定させる
+        updatePalmGuideOrientation();
+    </script>
+</body>
+</html>
