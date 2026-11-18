@@ -43,7 +43,7 @@
                             '50%': { top: '86%' },
                         },
                         fadeIn: {
-                            '0%': { opacity: '0', transform: 'translateY(12px)' },
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
                             '100%': { opacity: '1', transform: 'translateY(0)' },
                         }
                     }
@@ -52,6 +52,11 @@
         }
     </script>
     <style>
+        body {
+            background-color: #0d0714;
+            background-image: radial-gradient(circle at 50% 0%, #24153b 0%, #0d0714 70%);
+            min-height: 100vh;
+        }
         .gold-glow {
             box-shadow: 0 0 25px rgba(212, 175, 55, 0.25);
         }
@@ -60,34 +65,67 @@
         }
     </style>
 </head>
-<body class="bg-mystic-950 text-slate-100 font-sans min-h-screen flex flex-col selection:bg-mystic-gold selection:text-mystic-950">
+<body class="text-slate-100 font-sans antialiased flex flex-col min-h-screen selection:bg-mystic-gold selection:text-mystic-950">
 
     <!-- ヘッダー -->
-    <header class="w-full border-b border-mystic-gold/20 bg-mystic-900/80 backdrop-blur-md sticky top-0 z-30">
-        <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div class="flex items-center space-x-2.5">
-                <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-mystic-goldDark to-mystic-gold flex items-center justify-center text-mystic-950 shadow-lg">
+    <header class="w-full py-4 px-4 sm:px-8 border-b border-mystic-gold/20 bg-mystic-950/60 backdrop-blur-md sticky top-0 z-30">
+        <div class="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-full bg-gradient-to-br from-mystic-gold to-mystic-goldDark flex items-center justify-center text-mystic-950 shadow-md">
                     <i class="fa-solid fa-hand-sparkles text-lg"></i>
                 </div>
                 <div>
-                    <h1 class="font-serif font-bold text-lg sm:text-xl tracking-wider text-mystic-goldLight leading-tight">
-                        AI手相占い
-                    </h1>
-                    <p class="text-[10px] sm:text-xs text-purple-300/70 tracking-widest">MYSTIC PALM READER</p>
+                    <h1 class="font-serif font-bold text-lg sm:text-xl text-mystic-goldLight tracking-wider">AI手相占い</h1>
+                    <p class="text-[11px] text-purple-300/80 hidden sm:block">Mystic Palm Reader</p>
                 </div>
             </div>
 
-            <!-- 左手・右手 切り替えトグル -->
-            <div class="flex items-center bg-mystic-950/90 p-1 rounded-full border border-mystic-gold/30">
-                <button id="btn-left-hand" onclick="setHand('left')" class="px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-300 bg-mystic-gold text-mystic-950 shadow">
-                    左手 <span class="hidden sm:inline text-[10px] opacity-80">(先天運)</span>
-                </button>
-                <button id="btn-right-hand" onclick="setHand('right')" class="px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-300 text-purple-200 hover:text-white">
-                    右手 <span class="hidden sm:inline text-[10px] opacity-80">(後天運)</span>
+            <!-- 左手・右手 切り替えトグル＆AI設定ボタン -->
+            <div class="flex items-center gap-2">
+                <div class="flex items-center bg-mystic-950/90 p-1 rounded-full border border-mystic-gold/30">
+                    <button id="btn-left-hand" onclick="setHand('left')" class="px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-300 bg-mystic-gold text-mystic-950 shadow">
+                        左手 <span class="hidden sm:inline text-[10px] opacity-80">(先天運)</span>
+                    </button>
+                    <button id="btn-right-hand" onclick="setHand('right')" class="px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-300 text-purple-200 hover:text-white">
+                        右手 <span class="hidden sm:inline text-[10px] opacity-80">(後天運)</span>
+                    </button>
+                </div>
+                <button onclick="toggleApiModal()" title="Gemini AI連携設定" class="w-9 h-9 rounded-full bg-mystic-950/90 border border-mystic-gold/30 text-mystic-gold hover:bg-mystic-800 flex items-center justify-center transition relative">
+                    <i class="fa-solid fa-key text-xs"></i>
+                    <span id="api-status-dot" class="hidden absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-mystic-950"></span>
                 </button>
             </div>
         </div>
     </header>
+
+    <!-- Gemini APIキー設定モーダル（任意） -->
+    <div id="api-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-mystic-900 border border-mystic-gold/50 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-fade-in">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-serif font-bold text-lg text-mystic-goldLight flex items-center gap-2">
+                    <i class="fa-solid fa-wand-magic-sparkles text-mystic-gold"></i> Gemini AI リアル鑑定設定
+                </h3>
+                <button onclick="toggleApiModal()" class="text-purple-300 hover:text-white">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <p class="text-xs text-purple-200/85 leading-relaxed mb-4">
+                Google AI Studio で取得した無料APIキーを入力すると、撮影した写真から本物のシワの枝分かれや細かな線まで Gemini AI が直接読み取って鑑定します。（未入力の場合は内蔵の画像解析エンジンが自動動作します）
+            </p>
+            <div class="mb-4">
+                <label class="block text-xs text-mystic-gold mb-1.5 font-medium">Gemini API Key（ブラウザ内にのみ保存）</label>
+                <input type="password" id="api-key-input" placeholder="AIzaSy..." class="w-full px-3.5 py-2.5 rounded-xl bg-mystic-950 border border-mystic-gold/30 text-sm text-white focus:outline-none focus:border-mystic-gold">
+            </div>
+            <div class="flex items-center justify-end gap-2.5">
+                <button onclick="clearApiKey()" class="px-4 py-2 rounded-xl text-xs text-purple-300 hover:text-white transition">
+                    クリア
+                </button>
+                <button onclick="saveApiKey()" class="px-5 py-2 rounded-xl bg-mystic-gold text-mystic-950 font-bold text-xs hover:brightness-110 transition">
+                    保存する
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- メインコンテンツ -->
     <main class="flex-1 w-full max-w-4xl mx-auto px-4 py-6 flex flex-col items-center">
@@ -271,7 +309,7 @@
                 </div>
                 <div class="flex-1 text-center sm:text-left">
                     <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-mystic-gold/15 border border-mystic-gold/30 text-mystic-gold text-xs font-medium mb-2">
-                        <i class="fa-solid fa-star"></i> 鑑定完了
+                        <i class="fa-solid fa-star"></i> <span id="result-engine-badge">鑑定完了</span>
                     </div>
                     <h2 id="result-catchphrase" class="font-serif text-xl sm:text-2xl font-bold text-mystic-goldLight leading-snug mb-2">
                         <!-- AIが生成するキャッチコピー -->
@@ -333,6 +371,41 @@
                 </div>
             </div>
 
+            <!-- 追加運勢カード：金運（財運線）＆ 結婚運（結婚線） -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- 金運（財運線） -->
+                <div class="bg-mystic-900/80 border border-amber-400/35 rounded-2xl p-5 shadow-lg flex flex-col">
+                    <div class="flex items-center gap-2.5 mb-3">
+                        <span class="w-8 h-8 rounded-lg bg-amber-400/20 text-amber-300 flex items-center justify-center">
+                            <i class="fa-solid fa-coins"></i>
+                        </span>
+                        <div>
+                            <h3 class="font-serif font-bold text-amber-300 text-base">金運・財運線</h3>
+                            <p class="text-[10px] text-amber-400/70">財力・商才・資産形成</p>
+                        </div>
+                    </div>
+                    <p id="result-money" class="text-sm text-slate-200 leading-relaxed flex-grow">
+                        <!-- 金運の結果 -->
+                    </p>
+                </div>
+
+                <!-- 結婚運（結婚線） -->
+                <div class="bg-mystic-900/80 border border-rose-400/35 rounded-2xl p-5 shadow-lg flex flex-col">
+                    <div class="flex items-center gap-2.5 mb-3">
+                        <span class="w-8 h-8 rounded-lg bg-rose-400/20 text-rose-300 flex items-center justify-center">
+                            <i class="fa-solid fa-ring"></i>
+                        </span>
+                        <div>
+                            <h3 class="font-serif font-bold text-rose-300 text-base">結婚運・結婚線</h3>
+                            <p class="text-[10px] text-rose-400/70">パートナーシップ・良縁</p>
+                        </div>
+                    </div>
+                    <p id="result-marriage" class="text-sm text-slate-200 leading-relaxed flex-grow">
+                        <!-- 結婚運の結果 -->
+                    </p>
+                </div>
+            </div>
+
             <!-- ラッキーアドバイス -->
             <div class="bg-gradient-to-r from-mystic-800/90 via-mystic-900/90 to-mystic-800/90 border border-mystic-gold/50 rounded-2xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
                 <div class="absolute -right-6 -bottom-6 text-mystic-gold/10 text-8xl pointer-events-none">
@@ -356,10 +429,16 @@
                 </div>
             </div>
 
-            <!-- もう一度占うボタン -->
-            <div class="flex justify-center pt-2 pb-6">
-                <button onclick="resetApp()" class="py-3 px-8 rounded-xl bg-mystic-800 hover:bg-mystic-700 text-mystic-goldLight border border-mystic-gold/40 font-medium text-sm transition flex items-center gap-2 shadow-lg">
-                    <i class="fa-solid fa-rotate-left"></i> 別の手相を撮影して占う
+            <!-- シェア・保存・もう一度占うボタン -->
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 pb-6">
+                <button id="btn-copy-result" onclick="copyResultText()" class="w-full sm:w-auto py-3 px-6 rounded-xl bg-mystic-900 hover:bg-mystic-800 text-purple-100 border border-mystic-gold/30 font-medium text-sm transition flex items-center justify-center gap-2 shadow">
+                    <i class="fa-regular fa-copy text-mystic-gold"></i> <span>結果をコピー</span>
+                </button>
+                <button onclick="downloadResultCard()" class="w-full sm:w-auto py-3 px-6 rounded-xl bg-gradient-to-r from-mystic-goldDark via-mystic-gold to-mystic-goldDark text-mystic-950 font-bold text-sm hover:brightness-110 transition flex items-center justify-center gap-2 shadow-lg">
+                    <i class="fa-solid fa-download"></i> 鑑定カード画像を保存
+                </button>
+                <button onclick="resetApp()" class="w-full sm:w-auto py-3 px-6 rounded-xl bg-mystic-800 hover:bg-mystic-700 text-mystic-goldLight border border-mystic-gold/40 font-medium text-sm transition flex items-center justify-center gap-2 shadow">
+                    <i class="fa-solid fa-rotate-left"></i> 別の手相を占う
                 </button>
             </div>
         </section>
@@ -386,6 +465,47 @@
         let prevFrameData = null;
         let stableFrames = 0;
         let isAnalyzing = false;
+        let latestResultData = null;
+
+        // --- APIキー設定モーダル制御 ---
+        function toggleApiModal() {
+            const modal = document.getElementById('api-modal');
+            const input = document.getElementById('api-key-input');
+            if (modal.classList.contains('hidden')) {
+                input.value = localStorage.getItem('gemini_palm_api_key') || '';
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function saveApiKey() {
+            const val = document.getElementById('api-key-input').value.trim();
+            if (val) {
+                localStorage.setItem('gemini_palm_api_key', val);
+            } else {
+                localStorage.removeItem('gemini_palm_api_key');
+            }
+            updateApiKeyBadge();
+            toggleApiModal();
+        }
+
+        function clearApiKey() {
+            document.getElementById('api-key-input').value = '';
+            localStorage.removeItem('gemini_palm_api_key');
+            updateApiKeyBadge();
+            toggleApiModal();
+        }
+
+        function updateApiKeyBadge() {
+            const hasKey = !!(localStorage.getItem('gemini_palm_api_key') || '').trim();
+            const dot = document.getElementById('api-status-dot');
+            if (hasKey) {
+                dot.classList.remove('hidden');
+            } else {
+                dot.classList.add('hidden');
+            }
+        }
 
         // --- DOM要素の取得 ---
         const videoEl = document.getElementById('video-preview');
@@ -817,11 +937,13 @@
             // 3. 解析の実行（内蔵掌紋画像解析エンジン＋APIキーがある場合はGemini AI）
             try {
                 let readingResult = null;
+                let usedGemini = false;
                 const userApiKey = localStorage.getItem('gemini_palm_api_key') || '';
 
                 if (userApiKey.trim()) {
                     try {
                         readingResult = await callGeminiPalmReading(base64Image, currentHand, userApiKey.trim());
+                        usedGemini = true;
                     } catch (apiErr) {
                         console.warn("Gemini API呼び出しに失敗したため、内蔵解析エンジンへ切り替えます:", apiErr.message);
                     }
@@ -846,6 +968,7 @@
                 }
 
                 isAnalyzing = false;
+                readingResult._usedGemini = usedGemini;
                 displayResult(readingResult);
             } catch (error) {
                 console.error("鑑定エラー:", error);
@@ -913,28 +1036,48 @@
                     }
 
                     // 掌の領域ごとのエッジ強度（シワの深さ・細かさ）を計測
-                    let upperCrease = 0; // 感情線エリア
-                    let midCrease = 0;   // 頭脳線エリア
-                    let lowerCrease = 0; // 生命線エリア
+                    let upperCrease = 0;      // 感情線・結婚線エリア
+                    let midCrease = 0;        // 頭脳線エリア
+                    let lowerCrease = 0;      // 生命線エリア
+                    let pinkySideCrease = 0;  // 小指側（財運線・結婚線エリア）
+                    let thumbSideCrease = 0;  // 親指側（金星丘・生命力エリア）
+                    let fineLineCount = 0;    // 細かな支線の数
+                    let deepLineCount = 0;    // くっきり深い主線の数
                     let featureHash = 0;
 
                     for (let y = 65; y < 145; y++) {
                         for (let x = 48; x < 112; x++) {
                             const i = y * w + x;
-                            // 縦横の輝度勾配（シワの溝を検出）
+                            // 縦横＋斜めの輝度勾配（シワの溝を多角的に検出）
                             const dx = Math.abs(gray[i + 1] - gray[i - 1]);
                             const dy = Math.abs(gray[i + w] - gray[i - w]);
-                            const edge = dx + dy;
+                            const dDiag = Math.abs(gray[i + w + 1] - gray[i - w - 1]);
+                            const edge = dx + dy + dDiag * 0.5;
 
-                            if (edge > 18) {
+                            if (edge > 16) {
+                                if (edge > 42) deepLineCount++;
+                                else fineLineCount++;
+
                                 if (y < 92) upperCrease += edge;
                                 else if (y < 118) midCrease += edge;
                                 else lowerCrease += edge;
-                                featureHash = (featureHash * 31 + Math.round(edge)) % 100000;
+
+                                // 小指側と親指側の判定
+                                const isPinkyZone = (handSide === 'left') ? (x < 76) : (x > 84);
+                                const isThumbZone = (handSide === 'left') ? (x > 86) : (x < 74);
+
+                                if (isPinkyZone && y < 118) {
+                                    pinkySideCrease += edge;
+                                }
+                                if (isThumbZone && y >= 95) {
+                                    thumbSideCrease += edge;
+                                }
+                                featureHash = ((featureHash << 5) - featureHash + Math.round(edge * (x + y))) | 0;
                             }
                         }
                     }
 
+                    const absHash = Math.abs(featureHash);
                     const isLeft = handSide === 'left';
                     const handTitle = isLeft ? '生まれ持った本質' : '現在の運気と行動力';
 
@@ -943,62 +1086,168 @@
                         "周囲を温かく照らし、確かな信頼で未来を拓く太陽の相",
                         "鋭い洞察力と粘り強さを兼ね備えた、孤高のクリエイター",
                         "豊かな感受性と行動力でチャンスを掴み取る幸運の持ち主",
-                        "穏やかな包容力の奥に、揺るぎない情熱を秘めた賢者の相"
+                        "穏やかな包容力の奥に、揺るぎない情熱を秘めた賢者の相",
+                        "逆境すら追い風に変える、不屈の精神と突破力の持ち主",
+                        "繊細な気配りと大胆な決断力で人を導く天性のリーダー相",
+                        "独自の美意識と独創性で新しい時代を切り拓く革新者の相",
+                        "誠実な努力が大きな実りとなって返ってくる王道の繁栄相",
+                        "人と人とのご縁を結び、思いがけない幸運を呼び込む招福の相",
+                        "冷静な分析力と熱い探究心で真理に迫る知性のスペシャリスト",
+                        "自由な発想と軽やかな行動力で世界を広げる冒険家の相",
+                        "深い愛情と共感力で周囲に安心感を与える癒やしの守護者",
+                        "ピンチのときほど底力を発揮する、強運と勝負強さの持ち主",
+                        "細部へのこだわりと職人肌気質で信頼を勝ち取る匠の相",
+                        "時代の流れをいち早く察知する、鋭敏なアンテナを持つ先駆者",
+                        "穏やかな微笑みの裏に強い信念を宿す、芯の通った実力者",
+                        "多彩な才能が絶妙なバランスで開花するマルチプレイヤーの相"
                     ];
 
                     const overallTemplates = [
-                        `${handTitle}を表す掌全体に、バランスの取れた美しい気の流れが刻まれています。特に主要な三線が互いに補い合うように伸びており、自分のペースを大切にしながら着実に理想を現実へと変えていく力強い運勢を示しています。`,
+                        `${handTitle}を表す掌全体に、バランスの取れた美しい気の流れが刻まれています。主要な三線が互いに補い合うように伸びており、自分のペースを大切にしながら着実に理想を現実へと変えていく力強い運勢を示しています。`,
                         `手のひらの肉付きとシワの深さから、非常にエネルギッシュで前向きな${handTitle}が読み取れます。変化を恐れずに一歩踏み出すことで、思いがけない良縁や新しいステージへの扉が次々と開かれていくでしょう。`,
-                        `きめ細やかな支線と芯の通った主線が共存しており、繊細な気配りと大胆な決断力を併せ持つ${handTitle}が表れています。これまでの経験が糧となり、これからさらに大きな実りを迎える時期に入っています。`
+                        `きめ細やかな支線と芯の通った主線が共存しており、繊細な気配りと大胆な決断力を併せ持つ${handTitle}が表れています。これまでの経験が糧となり、これからさらに大きな実りを迎える時期に入っています。`,
+                        `掌の中央に向かってエネルギーが力強く集まっており、目標を定めたときの集中力と実現力が際立つ${handTitle}です。周囲からの協力や引き立てにも恵まれやすく、公私ともに充実した展開が期待できます。`,
+                        `しなやかで伸びやかな線の流れから、環境の変化に柔軟に対応できる適応力と知恵を備えた${handTitle}がうかがえます。直感を信じて選んだ道が、結果として最良のルートへと繋がっていく強運の持ち主です。`,
+                        `ひとつひとつの線が迷いなく刻まれており、自分の軸をしっかりと持った誠実な${handTitle}が表れています。派手さよりも確かな実績を積み上げることで、揺るぎない地位と信頼を手にする相です。`,
+                        `掌全体に瑞々しい活気が満ちており、新しいアイデアや人との出会いが次々と舞い込む発展的な${handTitle}です。好奇心の赴くままに行動範囲を広げることで、眠っていた才能が大きく花開きます。`,
+                        `穏やかな曲線と鋭い直線が絶妙に組み合わさっており、理性と感情のバランス感覚に優れた${handTitle}を示しています。人間関係の調整役としても重宝され、あなたを中心に良い流れが生まれていきます。`,
+                        `手のひらの丘の盛り上がりと線の勢いから、ここ一番での勝負強さと底力を秘めた${handTitle}が読み取れます。今はまだ準備段階に思えることも、やがて大きな飛躍の土台となっていくでしょう。`,
+                        `細やかな気遣いができる優しさと、納得いくまでやり抜く粘り強さが同居する${handTitle}です。自分では当たり前と思っている習慣や特技が、周囲から高く評価される転機が近づいています。`
                     ];
 
-                    const lifeReadings = lowerCrease > 4500
-                        ? "生命線が力強く張り出し、手首に向かって深く刻まれています。体力・精神力ともに充実しており、多少の困難も跳ね返す抜群の回復力とバイタリティを備えています。"
-                        : "穏やかで美しい弧を描く生命線です。無理をせず自分のリズムを整えることで本来の力を最大限に発揮でき、長く安定した健康運と充実した日々を歩めます。";
+                    const lifeReadingsPool = [
+                        "生命線が力強く張り出し、手首に向かって深く刻まれています。体力・精神力ともに充実しており、多少の困難も跳ね返す抜群の回復力とバイタリティを備えています。",
+                        "穏やかで美しい弧を描く生命線です。無理をせず自分のリズムを整えることで本来の力を最大限に発揮でき、長く安定した健康運と充実した日々を歩めます。",
+                        "親指の付け根（金星丘）を大きく囲むように伸びる生命線です。愛情や生命エネルギーが豊かで、周囲の人にも元気を与えるエネルギッシュな体質を示しています。",
+                        "途中からさらに勢いを増して伸びる生命線の気配があります。年齢や経験を重ねるごとに運気と体力が充実していく、典型的な大器晩成型のバイタリティです。",
+                        "細やかな支線を伴いながらしなやかに伸びる生命線です。環境の変化に敏感な分、早めの休息や気分転換を取り入れることで、驚くほどの持久力を発揮します。",
+                        "まっすぐ力強い意志を感じさせる生命線です。目標に向かって一直線に突き進む行動力があり、ハードなスケジュールも持ち前の集中力で乗り切れます。",
+                        "手首の近くまで途切れなく続く安定した生命線です。生活習慣や日々のルーティンを大切にすることで、心身ともに健やかな状態を長く維持できる相です。",
+                        "内側からじんわりと力が湧き上がるような調和の取れた生命線です。自分の好きなことや趣味に没頭する時間を持つことで、生命エネルギーが一気に活性化します。"
+                    ];
 
-                    const headReadings = midCrease > 4200
-                        ? "頭脳線がくっきりと長く伸びており、物事の本質を見抜く論理的思考力と高い集中力を持っています。専門分野や企画・分析などの仕事で独自の才能が花開きます。"
-                        : "柔軟でしなやかなカーブを描く頭脳線です。固定観念にとらわれない豊かな発想力と直感に優れており、クリエイティブな活動や人との対話から大きなヒントを得られます。";
+                    const headReadingsPool = [
+                        "頭脳線がくっきりと長く伸びており、物事の本質を見抜く論理的思考力と高い集中力を持っています。専門分野や企画・分析などの仕事で独自の才能が花開きます。",
+                        "柔軟でしなやかなカーブを描く頭脳線です。固定観念にとらわれない豊かな発想力と直感に優れており、クリエイティブな活動や人との対話から大きなヒントを得られます。",
+                        "月丘（小指側の下部）に向かって優雅に下がる頭脳線の傾向が見られます。想像力や芸術的センスに恵まれ、企画・デザイン・文章など表現の分野で輝きを放ちます。",
+                        "掌を横切るようにまっすぐ伸びる現実的で明晰な頭脳線です。数字や仕組みを整理する力に長けており、ビジネスや実務の現場で頼りにされる判断力を備えています。",
+                        "生命線と少し離れてスタートする大胆な頭脳線の気配があります。独立心と決断力に優れ、新しいプロジェクトの立ち上げやリーダーシップを発揮する場面で本領を発揮します。",
+                        "先端に向かって繊細な広がりを見せる頭脳線です。一つの視点だけでなく多角的に物事を捉えることができ、異なる分野の知識を掛け合わせて新しい価値を生み出せます。",
+                        "穏やかな傾斜でバランスよく伸びる頭脳線です。常識と独創性のちょうど良いバランス感覚を持っており、どんな職場や環境でもスムーズに実力を発揮できる万能型です。",
+                        "深い思考力と探究心を示す芯の通った頭脳線です。興味を持ったテーマを徹底的に深掘りすることで、他の人には真似できない専門性と信頼を築き上げます。"
+                    ];
 
-                    const heartReadings = upperCrease > 4200
-                        ? "感情線が人差し指の付け根に向かって深く伸びており、愛情深く誠実な人柄が表れています。大切な人との絆を何よりも重んじ、周囲から深い信頼を集める相です。"
-                        : "明るく伸びやかな感情線です。素直で風通しの良いコミュニケーションが得意で、恋愛でも対人関係でも自然体の魅力によって素敵なご縁を引き寄せます。";
+                    const heartReadingsPool = [
+                        "感情線が人差し指の付け根に向かって深く伸びており、愛情深く誠実な人柄が表れています。大切な人との絆を何よりも重んじ、周囲から深い信頼を集める相です。",
+                        "明るく伸びやかな感情線です。素直で風通しの良いコミュニケーションが得意で、恋愛でも対人関係でも自然体の魅力によって素敵なご縁を引き寄せます。",
+                        "人差し指と中指の間へと美しく入り込む感情線です。気配り上手で相手の気持ちを察する力に長けており、パートナーや友人から「一緒にいると安心する」と慕われます。",
+                        "まっすぐで裏表のない素直な感情線の傾向があります。感情表現がストレートで裏表がないため、誤解されることが少なく、長く続く誠実な人間関係を築けます。",
+                        "細やかな枝分かれが見られる豊かな感情線です。感受性が豊かで共感力が高く、人の喜びも悲しみも自分のことのように受け止められる温かい心の持ち主です。",
+                        "木星丘（人差し指の下）に向かって力強く上昇する感情線です。理想が高く向上心に溢れており、互いに高め合える尊敬できる相手と素晴らしい関係を築きます。",
+                        "穏やかな波のように優しいカーブを描く感情線です。場の空気を和ませる天性のムードメーカー気質があり、あなたの周りには自然と笑顔の人が集まります。",
+                        "情熱と理性のバランスが取れた洗練された感情線です。一時の感情に流されることなく、相手の本質をしっかりと見極めた上で深い信頼関係を育んでいけます。"
+                    ];
 
-                    const advices = [
+                    const moneyReadingsPool = [
+                        "小指の下（水星丘）に向かって縦に伸びる財運線の気配が強く表れています。お金の流れを生み出すセンスと企画力に優れ、知識やスキルを活かして着実に資産を築ける相です。",
+                        "堅実で安定した金運の持ち主です。無駄な出費を抑えつつ、自己投資や人とのご縁にお金を使うことで、後から大きな豊かさとなって巡ってくる好循環を持っています。",
+                        "太陽丘（薬指の下）と水星丘の両方に良い気の流れが見られます。人からの信頼や人気がそのまま収入やチャンスに結びつく、恵まれた金運の持ち主です。",
+                        "自分のアイデアや工夫を収益に変える商才が表れています。副業や新しいスキルの習得など、小さな種まきを始めることで想像以上の実りを得られる相です。",
+                        "大きな波乱が少なく、計画的に財を蓄えていける着実な金運です。長期的な視点での資産形成や、価値あるものを長く大切に使うスタイルと非常に相性が良いでしょう。",
+                        "人脈を通じて思いがけない副収入や好条件の話が舞い込みやすい金運です。日頃から周囲への感謝を言葉にして伝えることで、さらに金運のパイプが太くなります。",
+                        "ピンチのときでも不思議と助けが入る強運な金運の持ち主です。必要なときに必要な分だけしっかり巡ってくるため、過度な心配をせず前向きに挑戦することで道が開けます。",
+                        "専門性や得意分野を磨くことで収入が右肩上がりに伸びていく相です。自分自身の価値を高める学びや道具への投資が、将来何倍にもなって返ってきます。"
+                    ];
+
+                    const marriageReadingsPool = [
+                        "感情線と小指の付け根の間に良縁を示す穏やかな気の流れが見られます。価値観を分かち合えるパートナーと深く温かな信頼関係を築き、互いに支え合う理想的な家庭運を持っています。",
+                        "自然体のまま心安らぐパートナーと結ばれる相です。焦らず自分の時間を充実させることで、あなたの魅力を一番理解してくれる相手との素晴らしい出会いが訪れます。",
+                        "誠実で尊敬し合えるパートナーシップを築ける相です。会話や共通の趣味を大切にすることで、年月を重ねるほどに絆と愛情が深まっていく幸せな結婚運です。",
+                        "直感的なフィーリングが合う相手と電撃的に距離が縮まる可能性を秘めています。第一印象で「なぜか話しやすい」と感じる人とのご縁を大切にすると良い展開になります。",
+                        "周囲からの紹介や信頼できるコミュニティを通じて、安心感のある良縁に恵まれる相です。お互いの仕事や夢を応援し合える、対等で自立した関係が築けます。",
+                        "相手の小さな優しさに気づけるあなたの包容力が、最高のパートナーを引き寄せます。無理に背伸びをせず、リラックスした状態で過ごせる相手が運命の鍵を握っています。",
+                        "家庭やプライベートが充実することで、仕事運や全体運まで一気に押し上げられる「あげまん・良縁」の相です。心地よい空間づくりが幸せを呼び込みます。",
+                        "ゆっくりと時間をかけて信頼を育み、揺るぎない絆で結ばれる大器晩成型の良縁相です。これまでの経験すべてが、理想のパートナーと出会うための大切なステップになっています。"
+                    ];
+
+                    const advicesPool = [
                         "朝一番に深呼吸をして今日やりたいことを一つだけ決めると、持ち前の集中力がさらに高まり幸運を引き寄せます。",
                         "直感で「面白そう」と感じたことには迷わず挑戦してみてください。新しい場所への外出が運気アップの鍵になります。",
-                        "身の回りの整理整頓や愛用している道具の手入れをすることで、思考がクリアになり良い知らせが舞い込みやすくなります。"
+                        "身の回りの整理整頓や愛用している道具の手入れをすることで、思考がクリアになり良い知らせが舞い込みやすくなります。",
+                        "いつもより少しだけ丁寧に挨拶や感謝の言葉を伝えてみてください。人との温かいやり取りが思いがけないチャンスを運びます。",
+                        "夜はスマホから少し離れて湯船にゆっくり浸かるなど、五感を休める時間を作ると直感力が冴えわたります。",
+                        "ずっと気になっていた本を読んだり新しい知識に触れたりすることで、停滞していた運気が一気に動き出します。",
+                        "お気に入りのカフェや自然の多い公園など、心地よい空間で一人時間を楽しむと素晴らしいアイデアが降りてきます。",
+                        "迷ったときは「ワクワクする方」を選んでみてください。あなたの掌に刻まれた強運が正しい方向へと導いてくれます。",
+                        "靴やバッグなど、外出時に身につけるものを綺麗に磨いておくと、良い場所や素敵なご縁へと自然と運ばれていきます。",
+                        "身近な人に小さなプレゼントや差し入れをすると、巡り巡って大きな幸運となってあなたのもとへ返ってきます。",
+                        "自分の得意なことや過去の成功体験をノートに書き出してみると、自信が湧いて次のステージへの扉が開きます。",
+                        "季節の旬の食材を取り入れた食事を楽しむことで、生命エネルギーが満たされ運気の土台がしっかりと整います。"
                     ];
 
-                    const luckyItems = [
+                    const luckyItemsPool = [
                         "ロイヤルブルー / 万年筆・ノート",
                         "シャンパンゴールド / 腕時計・アクセサリー",
                         "エメラルドグリーン / 観葉植物・ハーブティー",
                         "サンセットオレンジ / レザー小物・ハンカチ",
-                        "パールホワイト / ガラスのグラス・お気に入りのマグ"
+                        "パールホワイト / ガラスのグラス・お気に入りのマグ",
+                        "ディープパープル / アロマオイル・入浴剤",
+                        "ターコイズブルー / キーホルダー・スマホケース",
+                        "マスタードイエロー / トートバッグ・スニーカー",
+                        "ローズピンク / ハンドクリーム・リップバーム",
+                        "シルバーグレー / ワイヤレスイヤホン・ガジェット",
+                        "フォレストグリーン / 木製アイテム・ブックカバー",
+                        "コーラルレッド / ネクタイ・スカーフ",
+                        "ミッドナイトネイビー / 財布・カードケース",
+                        "ミントグリーン / ミントティー・タンブラー",
+                        "テラコッタブラウン / コーヒー豆・陶器の小皿",
+                        "ラベンダー / 安眠ピロー・ルームフレグランス",
+                        "アクアマリン / 折り畳み傘・パスケース",
+                        "ウォームベージュ / ストール・リネンシャツ"
                     ];
 
-                    const idx1 = Math.abs(featureHash) % catchphrases.length;
-                    const idx2 = Math.abs(Math.round(upperCrease + midCrease)) % overallTemplates.length;
-                    const idx3 = Math.abs(Math.round(lowerCrease)) % advices.length;
-                    const idx4 = Math.abs(featureHash + (isLeft ? 1 : 2)) % luckyItems.length;
+                    // 掌の各領域の実測値とハッシュを組み合わせて個人ごとに異なるインデックスを算出
+                    const cIdx = (absHash + Math.round(brightnessSum)) % catchphrases.length;
+                    const oIdx = (absHash + Math.round(upperCrease + midCrease + lowerCrease)) % overallTemplates.length;
+
+                    // 生命線：親指側の厚み＋下部シワ強度＋ハッシュで分岐
+                    const lifeScore = Math.round(lowerCrease + thumbSideCrease * 0.8);
+                    const lIdx = (lifeScore > 6500 ? 0 : 2) + ((absHash + Math.round(thumbSideCrease)) % (lifeReadingsPool.length - 2));
+
+                    // 頭脳線：中央シワ＋深い線の比率＋ハッシュで分岐
+                    const headScore = Math.round(midCrease + deepLineCount * 12);
+                    const hIdx = (headScore > 5800 ? 0 : 2) + ((absHash + deepLineCount) % (headReadingsPool.length - 2));
+
+                    // 感情線：上部シワ＋細かな支線の数＋ハッシュで分岐
+                    const heartScore = Math.round(upperCrease + fineLineCount * 6);
+                    const eIdx = (heartScore > 6000 ? 0 : 2) + ((absHash + fineLineCount) % (heartReadingsPool.length - 2));
+
+                    // 金運：小指側シワ＋ハッシュで分岐
+                    const mIdx = (pinkySideCrease > 2800 ? 0 : 2) + ((absHash + Math.round(pinkySideCrease)) % (moneyReadingsPool.length - 2));
+
+                    // 結婚運：上部＆小指側のバランス＋ハッシュで分岐
+                    const wIdx = ((upperCrease + pinkySideCrease) > 7200 ? 0 : 2) + ((absHash + Math.round(upperCrease * 0.5)) % (marriageReadingsPool.length - 2));
+
+                    const aIdx = (absHash + Math.round(lowerCrease + midCrease)) % advicesPool.length;
+                    const iIdx = (absHash + deepLineCount + fineLineCount + (isLeft ? 3 : 7)) % luckyItemsPool.length;
 
                     resolve({
                         isPalmDetected: true,
-                        catchphrase: catchphrases[idx1],
-                        overall: overallTemplates[idx2],
-                        lifeLine: lifeReadings,
-                        headLine: headReadings,
-                        heartLine: heartReadings,
-                        advice: advices[idx3],
-                        luckyItem: luckyItems[idx4]
+                        catchphrase: catchphrases[cIdx],
+                        overall: overallTemplates[oIdx],
+                        lifeLine: lifeReadingsPool[lIdx % lifeReadingsPool.length],
+                        headLine: headReadingsPool[hIdx % headReadingsPool.length],
+                        heartLine: heartReadingsPool[eIdx % heartReadingsPool.length],
+                        moneyLine: moneyReadingsPool[mIdx % moneyReadingsPool.length],
+                        marriageLine: marriageReadingsPool[wIdx % marriageReadingsPool.length],
+                        advice: advicesPool[aIdx],
+                        luckyItem: luckyItemsPool[iIdx]
                     });
                 };
                 img.src = dataUrl;
             });
         }
 
-        // --- Gemini API へのリクエスト関数（gemini-3-flash-preview 専用） ---
         // --- Gemini API へのリクエスト関数（APIキー設定時用） ---
         async function callGeminiPalmReading(base64Data, handSide, apiKey) {
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
@@ -1010,7 +1259,7 @@
 
 【重要ルール】
 1. 手のひらが全く写っていない場合（壁、天井、顔、真っ暗な画面、ピンボケで手が判別不能など）は、isPalmDetected を false にし、notDetectedReason に丁寧な撮り直しの案内を入れてください。
-2. 手のひらが写っている場合は、isPalmDetected を true にし、実際の画像に見えるシワ（生命線・頭脳線・感情線の長さ、カーブ、濃さ、分岐など）を具体的に観察して鑑定結果を日本語で出力してください。`;
+2. 手のひらが写っている場合は、isPalmDetected を true にし、実際の画像に見えるシワ（生命線・頭脳線・感情線・財運線・結婚線の長さ、カーブ、濃さ、分岐など）を具体的に観察して鑑定結果を日本語で出力してください。`;
 
             const payload = {
                 contents: [
@@ -1039,10 +1288,12 @@
                             lifeLine: { type: "STRING" },
                             headLine: { type: "STRING" },
                             heartLine: { type: "STRING" },
+                            moneyLine: { type: "STRING" },
+                            marriageLine: { type: "STRING" },
                             advice: { type: "STRING" },
                             luckyItem: { type: "STRING" }
                         },
-                        required: ["isPalmDetected", "catchphrase", "overall", "lifeLine", "headLine", "heartLine", "advice", "luckyItem"]
+                        required: ["isPalmDetected", "catchphrase", "overall", "lifeLine", "headLine", "heartLine", "moneyLine", "marriageLine", "advice", "luckyItem"]
                     }
                 }
             };
@@ -1070,17 +1321,200 @@
 
         // --- 鑑定結果を画面に反映 ---
         function displayResult(data) {
+            latestResultData = data;
+            document.getElementById('result-engine-badge').textContent = data._usedGemini ? 'Gemini AI リアル鑑定完了' : '掌紋画像解析 鑑定完了';
             document.getElementById('result-catchphrase').textContent = `「${data.catchphrase}」`;
             document.getElementById('result-overall').textContent = data.overall;
             document.getElementById('result-life').textContent = data.lifeLine;
             document.getElementById('result-head').textContent = data.headLine;
             document.getElementById('result-heart').textContent = data.heartLine;
+            document.getElementById('result-money').textContent = data.moneyLine;
+            document.getElementById('result-marriage').textContent = data.marriageLine;
             document.getElementById('result-advice').textContent = data.advice;
             document.getElementById('result-lucky-item').textContent = data.luckyItem;
 
             loadingSection.classList.add('hidden');
             resultSection.classList.remove('hidden');
             window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // --- 鑑定結果をクリップボードにコピー ---
+        function copyResultText() {
+            if (!latestResultData) return;
+            const handStr = currentHand === 'left' ? '左手（先天運）' : '右手（後天運）';
+            const shareText = [
+                `【AI手相占い 鑑定結果 - ${handStr}】`,
+                `「${latestResultData.catchphrase}」`,
+                ``,
+                `■ 総合運`,
+                latestResultData.overall,
+                ``,
+                `■ 生命線（健康・バイタリティ）`,
+                latestResultData.lifeLine,
+                ``,
+                `■ 頭脳線（才能・仕事運）`,
+                latestResultData.headLine,
+                ``,
+                `■ 感情線（恋愛・対人）`,
+                latestResultData.heartLine,
+                ``,
+                `■ 金運・財運線`,
+                latestResultData.moneyLine,
+                ``,
+                `■ 結婚運・結婚線`,
+                latestResultData.marriageLine,
+                ``,
+                `■ 開運アドバイス`,
+                latestResultData.advice,
+                `ラッキーアイテム：${latestResultData.luckyItem}`
+            ].join('\n');
+
+            const textarea = document.createElement('textarea');
+            textarea.value = shareText;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+
+            const btn = document.getElementById('btn-copy-result');
+            const span = btn.querySelector('span');
+            const originalText = span.textContent;
+            span.textContent = 'コピーしました！';
+            btn.classList.add('border-emerald-400', 'text-emerald-300');
+            setTimeout(() => {
+                span.textContent = originalText;
+                btn.classList.remove('border-emerald-400', 'text-emerald-300');
+            }, 2200);
+        }
+
+        // --- 鑑定結果カード画像をCanvasで生成してPNGダウンロード ---
+        function downloadResultCard() {
+            if (!latestResultData) return;
+            const cardCanvas = document.createElement('canvas');
+            cardCanvas.width = 900;
+            cardCanvas.height = 1220;
+            const ctx = cardCanvas.getContext('2d');
+
+            // 背景グラデーション
+            const bg = ctx.createLinearGradient(0, 0, 900, 1220);
+            bg.addColorStop(0, '#0d0714');
+            bg.addColorStop(0.5, '#1d1030');
+            bg.addColorStop(1, '#0d0714');
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, 900, 1220);
+
+            // ゴールドの外枠
+            ctx.strokeStyle = '#d4af37';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(28, 28, 844, 1164);
+            ctx.strokeStyle = 'rgba(212, 175, 55, 0.35)';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(40, 40, 820, 1140);
+
+            // タイトルヘッダー
+            ctx.fillStyle = '#d4af37';
+            ctx.font = 'bold 28px serif';
+            ctx.textAlign = 'center';
+            const handStr = currentHand === 'left' ? '左手（先天運）' : '右手（後天運）';
+            ctx.fillText(`✦ AI手相占い 鑑定書【${handStr}】✦`, 450, 95);
+
+            // テキスト折り返し描画ヘルパー
+            function drawWrappedText(text, x, y, maxWidth, lineHeight, maxLines = 4) {
+                const chars = text.split('');
+                let line = '';
+                let currentY = y;
+                let lineCount = 0;
+                for (let i = 0; i < chars.length; i++) {
+                    const testLine = line + chars[i];
+                    if (ctx.measureText(testLine).width > maxWidth && i > 0) {
+                        ctx.fillText(line, x, currentY);
+                        line = chars[i];
+                        currentY += lineHeight;
+                        lineCount++;
+                        if (lineCount >= maxLines - 1) {
+                            // 最終行は省略記号付きで収める
+                            let rest = line + chars.slice(i + 1).join('');
+                            while (ctx.measureText(rest + '…').width > maxWidth && rest.length > 0) {
+                                rest = rest.slice(0, -1);
+                            }
+                            ctx.fillText(rest + (chars.length > i + line.length ? '…' : ''), x, currentY);
+                            return currentY + lineHeight;
+                        }
+                    } else {
+                        line = testLine;
+                    }
+                }
+                ctx.fillText(line, x, currentY);
+                return currentY + lineHeight;
+            }
+
+            // キャッチコピー
+            ctx.fillStyle = '#f3e5ab';
+            ctx.font = 'bold 30px serif';
+            let nextY = drawWrappedText(`「${latestResultData.catchphrase}」`, 450, 155, 780, 42, 2);
+
+            // サムネイル画像と総合運エリア
+            const thumbImg = document.getElementById('captured-thumbnail');
+            if (thumbImg && thumbImg.complete && thumbImg.naturalWidth > 0) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(70, nextY + 10, 165, 215, 14);
+                ctx.clip();
+                ctx.drawImage(thumbImg, 70, nextY + 10, 165, 215);
+                ctx.restore();
+                ctx.strokeStyle = '#d4af37';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(70, nextY + 10, 165, 215);
+            }
+
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#d4af37';
+            ctx.font = 'bold 20px sans-serif';
+            ctx.fillText('【総合運】', 260, nextY + 35);
+            ctx.fillStyle = '#f1f5f9';
+            ctx.font = '18px sans-serif';
+            drawWrappedText(latestResultData.overall, 260, nextY + 68, 565, 28, 6);
+
+            // 5つの運勢セクションを描画
+            const sections = [
+                { title: '■ 生命線（健康・バイタリティ）', color: '#6ee7b7', text: latestResultData.lifeLine },
+                { title: '■ 頭脳線（才能・仕事運）', color: '#93c5fd', text: latestResultData.headLine },
+                { title: '■ 感情線（恋愛・対人）', color: '#f9a8d4', text: latestResultData.heartLine },
+                { title: '■ 金運・財運線（財力・商才）', color: '#fcd34d', text: latestResultData.moneyLine },
+                { title: '■ 結婚運・結婚線（良縁・パートナー）', color: '#fda4af', text: latestResultData.marriageLine }
+            ];
+
+            let secY = nextY + 265;
+            sections.forEach(sec => {
+                ctx.fillStyle = sec.color;
+                ctx.font = 'bold 20px sans-serif';
+                ctx.fillText(sec.title, 70, secY);
+                ctx.fillStyle = '#e2e8f0';
+                ctx.font = '17px sans-serif';
+                secY = drawWrappedText(sec.text, 70, secY + 28, 760, 25, 3) + 14;
+            });
+
+            // ラッキーアドバイス枠
+            ctx.fillStyle = 'rgba(212, 175, 55, 0.12)';
+            ctx.fillRect(65, secY + 5, 770, 125);
+            ctx.strokeStyle = 'rgba(212, 175, 55, 0.5)';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(65, secY + 5, 770, 125);
+
+            ctx.fillStyle = '#d4af37';
+            ctx.font = 'bold 19px sans-serif';
+            ctx.fillText(`✦ 開運アドバイス（ラッキー：${latestResultData.luckyItem}）`, 85, secY + 36);
+            ctx.fillStyle = '#f3e5ab';
+            ctx.font = '17px sans-serif';
+            drawWrappedText(latestResultData.advice, 85, secY + 66, 730, 25, 2);
+
+            // ダウンロード実行
+            const link = document.createElement('a');
+            link.download = `palm-reading-${currentHand}-${Date.now()}.png`;
+            link.href = cardCanvas.toDataURL('image/png');
+            link.click();
         }
 
         // --- もう一度占う（初期画面へ戻る） ---
@@ -1094,8 +1528,9 @@
             }
         }
 
-        // 初期ロード時にガイド枠の向き（デフォルト左手＝親指が右）を確定させる
+        // 初期ロード時にガイド枠の向き（デフォルト左手＝親指が右）とAPIバッジ状態を確定させる
         updatePalmGuideOrientation();
+        updateApiKeyBadge();
     </script>
 </body>
 </html>
