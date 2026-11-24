@@ -157,7 +157,7 @@
                 
                 <!-- ライブカメラ映像（PC/インカメラ基本のため鏡像表示） -->
                 <video id="video-preview" autoplay playsinline muted class="hidden w-full h-full object-cover mirror-video"></video>
-                
+
                 <!-- デモモード用Canvas -->
                 <canvas id="preview-canvas" class="hidden w-full h-full object-cover"></canvas>
 
@@ -201,8 +201,8 @@
                         </div>
                     </div>
 
-                    <!-- 5本指を大きく広げた手のひら輪郭と主要3線 SVG（ベース形状：親指が左側＝右手） -->
-                    <svg id="palm-svg" viewBox="0 0 340 380" class="w-full h-full max-w-[320px] max-h-[360px] opacity-85 transition-all duration-300">
+                    <!-- 5本指を大きく広げた手のひら輪郭と主要3線 SVG（画面全体に大きく表示：ベース形状＝親指が左側＝右手） -->
+                    <svg id="palm-svg" viewBox="0 0 340 380" class="w-full h-full max-w-[94%] max-h-[94%] opacity-85 transition-all duration-300">
                         <defs>
                             <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
                                 <feGaussianBlur stdDeviation="3" result="blur" />
@@ -462,12 +462,287 @@
         // 自動撮影（ハンズフリー検知）用変数
         let isAutoCaptureEnabled = true;
         let autoDetectTimer = null;
-        let prevFrameData = null;
+        let prevCenterRatio = null;
         let stableFrames = 0;
+        let missFrames = 0;
         let isAnalyzing = false;
         let latestResultData = null;
+        let backgroundFrame = null; // カメラ起動時の背景（手がない状態）を記憶
 
-        // --- APIキー設定モーダル制御 ---
+        // --- 背景差分＋手のひら輪郭・指の隙間・掌紋シワによる高精度「手のひら」検知 ---
+        function evaluatePalmShape(canvas, refBackground = null) {
+            const w = 120;
+            const h = 160;
+            const c = document.createElement('canvas');
+            c.width = w;
+            c.height = h;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(canvas, 0, 0, w, h);
+            const data = ctx.getImageData(0, 0, w, h).data;
+
+            let palmSkinCount = 0;      // 掌エリアの肌色ピクセル数
+            let palmTotalCount = 0;
+            let foregroundCount = 0;    // 背景から新しく現れたピクセル数
+            let borderSkinCount = 0;    // 画面端の肌色ピクセル数
+            let borderTotalCount = 0;
+
+            const gray = new Float32Array(w * h);
+            const skinMask = new Uint8Array(w * h);
+
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const idx = (y * w + x) * 4;
+                    const p = y * w + x;
+                    const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+                    gray[p] = 0.299 * r + 0.587 * g + 0.114 * b;
+
+                    // 人間の肌色判定（YCbCr色空間＋RGB比率による厳密判定：壁や木目を除外）
+                    const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+                    const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+                    const isSkin = (
+                        r > 60 && g > 35 && b > 20 &&
+                        r > g && r > b &&
+                        Math.abs(r - g) > 10 &&
+                        cr >= 133 && cr <= 178 &&
+                        cb >= 75 && cb <= 128
+                    );
+
+                    // 背景フレームがある場合は「新しくカメラの前に差し出された物体か」をチェック
+                    let isForeground = true;
+                    if (refBackground && refBackground.length === data.length) {
+                        const diffR = Math.abs(r - refBackground[idx]);
+                        const diffG = Math.abs(g - refBackground[idx + 1]);
+                        const diffB = Math.abs(b - refBackground[idx + 2]);
+                        isForeground = (diffR + diffG + diffB) > 42;
+                    }
+
+                    const activePalmPixel = isSkin && isForeground;
+                    skinMask[p] = activePalmPixel ? 1 : 0;
+
+                    // 掌の中央コア領域（x: 32..88, y: 65..135）
+                    if (x >= 32 && x < 88 && y >= 65 && y < 135) {
+                        palmTotalCount++;
+                        if (isSkin) palmSkinCount++;
+                        if (activePalmPixel) foregroundCount++;
+                    }
+
+                    // 画面の外周フレーム（壁や天井が肌色っぽくないかチェック）
+                    if (x < 6 || x >= w - 6 || y < 6) {
+                        borderTotalCount++;
+                        if (isSkin) borderSkinCount++;
+                    }
+                }
+            }
+
+            const palmSkinRatio = palmSkinCount / palmTotalCount;
+            const fgRatio = foregroundCount / palmTotalCount;
+            const borderRatio = borderSkinCount / borderTotalCount;
+
+            // 1. 手が差し出されていない場合（背景のみ）は即ブロック
+            if (refBackground && fgRatio < 0.28) {
+                return { valid: false, centerRatio: palmSkinRatio, reason: "枠内に手のひらをかざしてください。" };
+            }
+
+            // 2. 掌の面積が足りない、または画面全体が肌色（顔アップ・壁）の場合はブロック
+            if (palmSkinRatio < 0.34 || borderRatio > 0.55) {
+                return { valid: false, centerRatio: palmSkinRatio, reason: "枠の中央に手のひら全体を入れてください。" };
+            }
+
+            // 3. 上部エリア（指の領域 y: 28..62）で「指と指の隙間（0と1の切り替わり）」をカウント
+            // 手のひらを広げると横方向に「指(1)→隙間(0)→指(1)→隙間(0)→指(1)」と複数回切り替わる
+            let fingerTransitions = 0;
+            let fingerRowsChecked = 0;
+            for (let y = 32; y <= 58; y += 6) {
+                let transitions = 0;
+                let prev = 0;
+                for (let x = 18; x < w - 18; x++) {
+                    const cur = skinMask[y * w + x];
+                    if (cur !== prev) {
+                        transitions++;
+                        prev = cur;
+                    }
+                }
+                if (transitions >= 4) fingerTransitions++; // 少なくとも2本以上の指の分離がある行
+                fingerRowsChecked++;
+            }
+
+            if (fingerTransitions < 2) {
+                return { valid: false, centerRatio: palmSkinRatio, reason: "5本の指をパーに大きく広げて映してください。" };
+            }
+
+            // 4. 【手のひら vs 手の甲 厳格判別：輪郭の影を除外した「掌の真芯」での三大線実測】
+            // 手の甲のフチや指の股の影を線と誤認しないよう、上下左右6pxすべてが肌色（皮膚の内部）であるピクセルのみを検査対象にする
+            const creaseMap = new Uint8Array(w * h);
+            let upperZoneCrease = 0; // 感情線ゾーン (y: 68..86)
+            let midZoneCrease = 0;   // 頭脳線ゾーン (y: 87..106)
+            let lowerZoneCrease = 0; // 生命線ゾーン (y: 107..126)
+            let pureInteriorSkin = 0;
+
+            for (let y = 68; y < 126; y++) {
+                for (let x = 36; x < 84; x++) {
+                    const p = y * w + x;
+                    // 上下左右6px以内がすべて肌色（＝手の輪郭のフチではない純粋な皮膚の内部）かチェック
+                    if (!skinMask[p] || !skinMask[p - 6] || !skinMask[p + 6] || !skinMask[p - w * 6] || !skinMask[p + w * 6]) {
+                        continue;
+                    }
+                    pureInteriorSkin++;
+
+                    const centerLum = gray[p];
+
+                    // 局所的な周囲平均（半径4pxの皮膚の明るさ）との差分で照明の緩やかな丸み（手の甲の陰影）を除去
+                    const localMean = (
+                        gray[p - w * 4] + gray[p + w * 4] +
+                        gray[p - 4] + gray[p + 4] +
+                        gray[p - w * 3 - 3] + gray[p - w * 3 + 3] +
+                        gray[p + w * 3 - 3] + gray[p + w * 3 + 3]
+                    ) / 8;
+
+                    // 両岸（±2px）に挟まれた幅1〜3pxの鋭い溝かチェック
+                    const topBank = (gray[p - w * 2] + gray[p - w * 2 - 1] + gray[p - w * 2 + 1]) / 3;
+                    const botBank = (gray[p + w * 2] + gray[p + w * 2 - 1] + gray[p + w * 2 + 1]) / 3;
+                    const hTrench = Math.min(topBank - centerLum, botBank - centerLum);
+
+                    const leftBank = (gray[p - 2] + gray[p - 2 - w] + gray[p - 2 + w]) / 3;
+                    const rightBank = (gray[p + 2] + gray[p + 2 - w] + gray[p + 2 + w]) / 3;
+                    const vTrench = Math.min(leftBank - centerLum, rightBank - centerLum);
+
+                    const d1Trench = Math.min(gray[p - w * 2 - 2] - centerLum, gray[p + w * 2 + 2] - centerLum);
+                    const d2Trench = Math.min(gray[p - w * 2 + 2] - centerLum, gray[p + w * 2 - 2] - centerLum);
+
+                    const trenchDepth = Math.max(hTrench, vTrench, d1Trench, d2Trench);
+                    const contrastDrop = localMean - centerLum;
+
+                    // 「鋭い溝」かつ「周囲の皮膚より暗い」本物の手相のシワを抽出（照明環境に柔軟な閾値）
+                    if (trenchDepth > 2.6 && contrastDrop > 2.4) {
+                        creaseMap[p] = 1;
+                        if (y <= 86) upperZoneCrease++;
+                        else if (y <= 106) midZoneCrease++;
+                        else lowerZoneCrease++;
+                    }
+                }
+            }
+
+            // 抽出したシワが「連続した長い線」を形成しているか連結成分（BFS）で計測
+            const visited = new Uint8Array(w * h);
+            let majorLinesCount = 0; // 三大線クラスの長さ（8px以上連続）を持つ線の本数
+            let totalCreasePixels = upperZoneCrease + midZoneCrease + lowerZoneCrease;
+            const detectedLinePaths = []; // 検出した実際の線座標を保存（結果画面での可視化用）
+
+            for (let y = 68; y < 126; y++) {
+                for (let x = 36; x < 84; x++) {
+                    const startP = y * w + x;
+                    if (creaseMap[startP] && !visited[startP]) {
+                        let queue = [startP];
+                        visited[startP] = 1;
+                        let minX = x, maxX = x, minY = y, maxY = y;
+                        let points = [];
+
+                        while (queue.length > 0) {
+                            const curr = queue.pop();
+                            const cx = curr % w;
+                            const cy = (curr / w) | 0;
+                            points.push({ x: cx / w, y: cy / h });
+                            if (cx < minX) minX = cx;
+                            if (cx > maxX) maxX = cx;
+                            if (cy < minY) minY = cy;
+                            if (cy > maxY) maxY = cy;
+
+                            for (let dy = -1; dy <= 1; dy++) {
+                                for (let dx = -1; dx <= 1; dx++) {
+                                    if (dx === 0 && dy === 0) continue;
+                                    const nx = cx + dx;
+                                    const ny = cy + dy;
+                                    if (nx >= 36 && nx < 84 && ny >= 68 && ny < 126) {
+                                        const np = ny * w + nx;
+                                        if (creaseMap[np] && !visited[np]) {
+                                            visited[np] = 1;
+                                            queue.push(np);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        const span = Math.hypot(maxX - minX, maxY - minY);
+                        if (span >= 8 && points.length >= 8) {
+                            majorLinesCount++;
+                            detectedLinePaths.push(points);
+                        } else if (span >= 5 && points.length >= 5) {
+                            detectedLinePaths.push(points);
+                        }
+                    }
+                }
+            }
+
+            // 4.5 【手の甲ブロックと手のひら許容の最適バランス】
+            // 連続する長い線が2本未満、または掌全体のシワ総量が極端に少ない（ツルツルな手の甲）場合のみブロック
+            const activeZones = (upperZoneCrease >= 2 ? 1 : 0) + (midZoneCrease >= 2 ? 1 : 0) + (lowerZoneCrease >= 2 ? 1 : 0);
+            if (pureInteriorSkin < 320 || majorLinesCount < 2 || totalCreasePixels < 18 || activeZones < 2) {
+                return {
+                    valid: false,
+                    centerRatio: palmSkinRatio,
+                    reason: "手の甲が映っているか、手相の線が薄いです。手のひらを明るく映してください。"
+                };
+            }
+
+            // 5. 【右手 vs 左手 判別（ガイド枠の親指ポケット位置との直接一致チェック）】
+            // 画面表示上：
+            // ・「左手」＝親指が右側（x: 78..116, y: 74..122）に突き出し、4本指は左寄り
+            // ・「右手」＝親指が左側（x: 4..42, y: 74..122）に突き出し、4本指は右寄り
+            let leftThumbPocket = 0;
+            let rightThumbPocket = 0;
+            let thumbPocketTotal = 0;
+            let leftUpperFingers = 0;
+            let rightUpperFingers = 0;
+
+            for (let y = 74; y <= 122; y++) {
+                for (let x = 6; x < 40; x++) {
+                    thumbPocketTotal++;
+                    if (skinMask[y * w + x]) leftThumbPocket++;
+                }
+                for (let x = 80; x < 114; x++) {
+                    if (skinMask[y * w + x]) rightThumbPocket++;
+                }
+            }
+
+            for (let y = 24; y <= 62; y++) {
+                for (let x = 22; x < 60; x++) {
+                    if (skinMask[y * w + x]) leftUpperFingers++;
+                }
+                for (let x = 60; x < 98; x++) {
+                    if (skinMask[y * w + x]) rightUpperFingers++;
+                }
+            }
+
+            const leftThumbRatio = leftThumbPocket / thumbPocketTotal;
+            const rightThumbRatio = rightThumbPocket / thumbPocketTotal;
+            // プラスなら「親指が右（左手）」、マイナスなら「親指が左（右手）」
+            const thumbDiff = (rightThumbPocket - leftThumbPocket) + (leftUpperFingers - rightUpperFingers) * 0.4;
+
+            if (currentHand === 'left') {
+                // 左手選択時：明らかに反対の手（右手）である場合のみブロック
+                if (rightThumbRatio < 0.08 || thumbDiff < 15) {
+                    return {
+                        valid: false,
+                        centerRatio: palmSkinRatio,
+                        reason: "「右手」か親指の位置がずれています。左手の親指を右側の枠に合わせてください。"
+                    };
+                }
+            } else {
+                // 右手選択時：明らかに反対の手（左手）である場合のみブロック
+                if (leftThumbRatio < 0.08 || thumbDiff > -15) {
+                    return {
+                        valid: false,
+                        centerRatio: palmSkinRatio,
+                        reason: "「左手」か親指の位置がずれています。右手の親指を左側の枠に合わせてください。"
+                    };
+                }
+            }
+
+            return { valid: true, centerRatio: palmSkinRatio, detectedLines: detectedLinePaths };
+        }
+
+        // --- Gemini APIキー設定モーダル制御 ---
         function toggleApiModal() {
             const modal = document.getElementById('api-modal');
             const input = document.getElementById('api-key-input');
@@ -599,104 +874,109 @@
 
         function resetAutoDetectState() {
             stableFrames = 0;
-            prevFrameData = null;
+            missFrames = 0;
+            prevCenterRatio = null;
             document.getElementById('countdown-overlay').classList.add('hidden');
             palmOutlinePathEl.setAttribute('stroke', '#d4af37');
             palmOutlinePathEl.setAttribute('fill', 'rgba(212, 175, 55, 0.06)');
         }
 
-        // --- ガイド枠内の手のひら検知＆自動撮影ループ ---
+        // --- 現在の背景フレーム（手がかざされる前の状態）をキャプチャ ---
+        function captureBackgroundReference() {
+            if (!videoEl.videoWidth) return;
+            const bgCanvas = document.createElement('canvas');
+            bgCanvas.width = 120;
+            bgCanvas.height = 160;
+            const bCtx = bgCanvas.getContext('2d');
+            if (isMirrored) {
+                bCtx.translate(bgCanvas.width, 0);
+                bCtx.scale(-1, 1);
+            }
+            bCtx.drawImage(videoEl, 0, 0, bgCanvas.width, bgCanvas.height);
+            backgroundFrame = bCtx.getImageData(0, 0, bgCanvas.width, bgCanvas.height).data;
+        }
+
+        // --- ガイド枠内の手のひら検知＆自動撮影ループ（背景差分＋指分離＋掌紋認識） ---
         function startAutoDetectionLoop() {
             stopAutoDetectionLoop();
             if (!isAutoCaptureEnabled || isDemoMode) return;
 
+            // ループ開始時に背景（まだ手が映っていない状態）を記憶
+            captureBackgroundReference();
+
             const detectCanvas = document.createElement('canvas');
-            detectCanvas.width = 64;
-            detectCanvas.height = 80;
+            detectCanvas.width = 160;
+            detectCanvas.height = 213;
             const dCtx = detectCanvas.getContext('2d', { willReadFrequently: true });
 
             autoDetectTimer = setInterval(() => {
                 if (!isAutoCaptureEnabled || isAnalyzing || isDemoMode || !videoEl.videoWidth) return;
 
-                dCtx.drawImage(videoEl, 0, 0, 64, 80);
-                const frame = dCtx.getImageData(0, 0, 64, 80).data;
-
-                // 中央の手のひら領域（x: 16..48, y: 18..68）と背景端（左上・右上）の差・肌色率・フレーム間静止度を計算
-                let skinPixels = 0;
-                let centerSampleCount = 0;
-                let motionDiff = 0;
-
-                for (let y = 18; y < 68; y++) {
-                    for (let x = 16; x < 48; x++) {
-                        const idx = (y * 64 + x) * 4;
-                        const r = frame[idx];
-                        const g = frame[idx + 1];
-                        const b = frame[idx + 2];
-
-                        centerSampleCount++;
-
-                        // 肌色・明るい手のひら領域の簡易判定（照明下での皮膚トーン広域カバー）
-                        const isSkinLike = (r > 75 && g > 40 && b > 25 && r > g && r > b && (r - Math.min(g, b)) > 12);
-                        if (isSkinLike) {
-                            skinPixels++;
-                        }
-
-                        if (prevFrameData) {
-                            motionDiff += Math.abs(r - prevFrameData[idx]) + Math.abs(g - prevFrameData[idx + 1]);
-                        }
-                    }
+                if (!backgroundFrame) {
+                    captureBackgroundReference();
                 }
 
-                prevFrameData = new Uint8ClampedArray(frame);
-
-                const skinRatio = skinPixels / centerSampleCount;
-                const avgMotion = motionDiff / centerSampleCount;
+                dCtx.save();
+                dCtx.clearRect(0, 0, detectCanvas.width, detectCanvas.height);
+                if (isMirrored) {
+                    dCtx.translate(detectCanvas.width, 0);
+                    dCtx.scale(-1, 1);
+                }
+                dCtx.drawImage(videoEl, 0, 0, detectCanvas.width, detectCanvas.height);
+                dCtx.restore();
 
                 const statusDot = document.getElementById('auto-status-dot');
                 const statusText = document.getElementById('auto-status-text');
                 const countdownOverlay = document.getElementById('countdown-overlay');
                 const countdownNum = document.getElementById('countdown-number');
 
-                // 枠内に手のひらが十分に入っている（32%以上が手の色調）場合
-                if (skinRatio > 0.32) {
+                const check = evaluatePalmShape(detectCanvas, backgroundFrame);
+
+                if (check.valid) {
+                    missFrames = 0;
+
                     palmOutlinePathEl.setAttribute('stroke', '#34d399');
                     palmOutlinePathEl.setAttribute('fill', 'rgba(52, 211, 153, 0.12)');
 
-                    // 手がピタッと静止している判定（動きが小さい）
-                    if (avgMotion < 14) {
-                        stableFrames++;
-                        statusDot.className = "w-2 h-2 rounded-full bg-emerald-400 animate-ping";
-                        statusText.textContent = "手のひらを認識！そのまま静止してください...";
+                    // 手の面積変化が小さければ「静止している」と判定
+                    const diffRatio = (prevCenterRatio !== null) ? Math.abs(check.centerRatio - prevCenterRatio) : 0;
+                    prevCenterRatio = check.centerRatio;
 
-                        if (stableFrames >= 3) {
+                    if (diffRatio < 0.06) {
+                        stableFrames++;
+                        const handName = currentHand === 'left' ? '左手' : '右手';
+                        statusDot.className = "w-2 h-2 rounded-full bg-emerald-400 animate-ping";
+                        statusText.textContent = `「${handName}」の手のひらを認識！そのまま静止...`;
+
+                        if (stableFrames >= 2) {
                             countdownOverlay.classList.remove('hidden');
-                            const remaining = Math.max(1, Math.ceil((8 - stableFrames) / 3));
+                            const remaining = Math.max(1, Math.ceil((6 - stableFrames) / 2));
                             countdownNum.textContent = remaining;
                         }
 
-                        // 約1.6秒（8フレーム × 200ms）静止したら自動シャッター
-                        if (stableFrames >= 8) {
+                        if (stableFrames >= 6) {
                             stopAutoDetectionLoop();
                             countdownOverlay.classList.add('hidden');
                             captureAndAnalyze();
                         }
                     } else {
-                        // 手が動いている間はカウントを少し戻す
-                        stableFrames = Math.max(0, stableFrames - 1);
-                        countdownOverlay.classList.add('hidden');
+                        stableFrames = Math.max(1, stableFrames - 1);
                         statusDot.className = "w-2 h-2 rounded-full bg-amber-400";
-                        statusText.textContent = "手が動いています。枠に合わせて止めてください";
+                        statusText.textContent = "手が動いています。そのまま止めてください";
                     }
                 } else {
-                    // 枠内に手がない状態
-                    stableFrames = 0;
-                    countdownOverlay.classList.add('hidden');
-                    palmOutlinePathEl.setAttribute('stroke', '#d4af37');
-                    palmOutlinePathEl.setAttribute('fill', 'rgba(212, 175, 55, 0.06)');
-                    statusDot.className = "w-2 h-2 rounded-full bg-purple-400 animate-pulse";
-                    statusText.textContent = "枠内に大きく手を広げてください";
+                    missFrames++;
+                    if (missFrames >= 3) {
+                        stableFrames = 0;
+                        prevCenterRatio = null;
+                        countdownOverlay.classList.add('hidden');
+                        palmOutlinePathEl.setAttribute('stroke', '#d4af37');
+                        palmOutlinePathEl.setAttribute('fill', 'rgba(212, 175, 55, 0.06)');
+                        statusDot.className = "w-2 h-2 rounded-full bg-purple-400 animate-pulse";
+                        statusText.textContent = check.reason;
+                    }
                 }
-            }, 200);
+            }, 220);
         }
 
         function stopAutoDetectionLoop() {
@@ -892,13 +1172,7 @@
             hideMessage();
             stopAutoDetectionLoop();
 
-            // スキャン演出を表示
-            scanLineEl.classList.remove('hidden');
-
-            // 少し演出を見せてからキャプチャ処理へ
-            await new Promise(r => setTimeout(r, 700));
-
-            // 1. 静止画のキャプチャ（長辺768px以下に最適化）
+            // 1. 静止画のキャプチャ（プレビュー枠と同じ3:4比率で中央クロップし、トレース位置と完全一致させる）
             const captureCanvas = document.createElement('canvas');
             const ctx = captureCanvas.getContext('2d');
             const maxDim = 768;
@@ -910,16 +1184,28 @@
             } else {
                 const vw = videoEl.videoWidth || 640;
                 const vh = videoEl.videoHeight || 480;
-                const scale = Math.min(1, maxDim / Math.max(vw, vh));
-                captureCanvas.width = Math.round(vw * scale);
-                captureCanvas.height = Math.round(vh * scale);
+                // プレビュー枠（aspect-[3/4]）と同じ比率で中央を切り抜く
+                const targetAspect = 3 / 4;
+                const videoAspect = vw / vh;
+                let sx = 0, sy = 0, sWidth = vw, sHeight = vh;
+                if (videoAspect > targetAspect) {
+                    sWidth = vh * targetAspect;
+                    sx = (vw - sWidth) / 2;
+                } else {
+                    sHeight = vw / targetAspect;
+                    sy = (vh - sHeight) / 2;
+                }
+
+                const scale = Math.min(1, maxDim / Math.max(sWidth, sHeight));
+                captureCanvas.width = Math.round(sWidth * scale);
+                captureCanvas.height = Math.round(sHeight * scale);
                 
                 // インカメラ（鏡像）の場合は見た目通りの向きでキャプチャ
                 if (isMirrored) {
                     ctx.translate(captureCanvas.width, 0);
                     ctx.scale(-1, 1);
                 }
-                ctx.drawImage(videoEl, 0, 0, captureCanvas.width, captureCanvas.height);
+                ctx.drawImage(videoEl, sx, sy, sWidth, sHeight, 0, 0, captureCanvas.width, captureCanvas.height);
             }
 
             const fullDataUrl = captureCanvas.toDataURL('image/jpeg', 0.85);
@@ -951,8 +1237,28 @@
 
                 // プレビュー環境（APIキーなし）またはAPI制限時は、撮影した実際の画像をピクセル解析して鑑定
                 if (!readingResult) {
-                    await new Promise(r => setTimeout(r, 900)); // 鑑定演出のウェイト
+                    // デモモード以外では、手のひらであることを厳格チェック（手動撮影時も異物・手なしをブロック）
+                    let detectedLinesForOverlay = [];
+                    if (!isDemoMode) {
+                        const check = evaluatePalmShape(captureCanvas, backgroundFrame);
+
+                        if (!check.valid) {
+                            isAnalyzing = false;
+                            loadingSection.classList.add('hidden');
+                            cameraSection.classList.remove('hidden');
+                            showMessage(`手のひら以外のものは占えません。（${check.reason}）`);
+                            if (isAutoCaptureEnabled) {
+                                resetAutoDetectState();
+                                startAutoDetectionLoop();
+                            }
+                            return;
+                        }
+                        detectedLinesForOverlay = check.detectedLines || [];
+                    }
+
+                    await new Promise(r => setTimeout(r, 700)); // 鑑定演出のウェイト
                     readingResult = await analyzePalmLocallyFromImage(fullDataUrl, currentHand);
+                    readingResult._detectedLines = detectedLinesForOverlay;
                 }
                 
                 if (readingResult.isPalmDetected === false) {
@@ -1295,25 +1601,25 @@
                         "相手の小さな優しさに気づけるあなたの包容力が、最高のパートナーを引き寄せます。無理に背伸びをせず、リラックスした状態で過ごせる相手が運命の鍵を握っています。",
                         "家庭やプライベートが充実することで、仕事運や全体運まで一気に押し上げられる「あげまん・良縁」の相です。心地よい空間づくりが幸せを呼び込みます。",
                         "ゆっくりと時間をかけて信頼を育み、揺るぎない絆で結ばれる大器晩成型の良縁相です。これまでの経験すべてが、理想のパートナーと出会うための大切なステップになっています。",
-                        "小指の下から薬指方面（太陽丘）へと伸びる「玉の輿・開運結婚線」の兆しがあります。結婚やパートナーとの出会いをきっかけに、社会的にも経済的にも大きく飛躍する相です。",
-                        "くっきりと一本刻まれた迷いのない結婚線の気配です。生涯を通じて一人の人を深く愛し抜く一途な愛情運を持ち、穏やかで温かい家庭を築き上げます。",
-                        "友人のような気楽さと恋人としてのときめきを両立できる素敵なパートナーシップの相です。一緒に笑い合える時間を大切にすることで、いつまでも新鮮な関係が続きます。",
-                        "感情線に近い位置に良縁のサインが見られ、早い段階から結婚や深いパートナーシップを意識するご縁に恵まれます。素直な気持ちを言葉にすることで運命が大きく動きます。",
-                        "小指側の真ん中あたりに美しい気の流れがあり、精神的にも経済的にも成熟したベストなタイミングで理想の相手と結ばれる王道の良縁相です。",
-                        "旅先や新しい習い事、普段とは違う場所での出会いに強い縁がある相です。行動範囲を少し広げるだけで、価値観のぴったり合う運命の相手と巡り会えます。",
-                        "お互いの自由と個性を尊重し合える、風通しの良い現代的なパートナーシップを築ける相です。依存しすぎず自立しているからこそ、深い信頼で結ばれます。",
-                        "困難なときこそ二人で力を合わせて乗り越えられる、強い絆の結婚運です。日常の「ありがとう」を大切にすることで、どんな嵐も寄せ付けない温かい家庭になります。",
-                        "細かな愛情の支線が寄り添う、周囲からも祝福される華やかな結婚運です。人とのご縁を大切にするあなたの姿勢が、最高のキューピッドを引き寄せます。",
-                        "グルメや旅行、インテリアなど、暮らしの楽しみを共有できる相手と素晴らしい家庭を築く相です。一緒に美味しいものを食べる時間が二人の絆を強くします。",
-                        "過去の恋愛や人間関係での学びを活かし、本当に自分に合った誠実な相手を選び取れる賢明な結婚運です。心の奥で安心できる感覚を信じると間違いありません。",
-                        "結婚や同居を境に精神的な安定感が増し、本来の才能がさらに輝き始める相です。パートナーがあなたの最大の理解者となり、夢の実現を力強く後押ししてくれます。",
-                        "言葉にしなくても気持ちが通じ合うような、深い共感力で結ばれるソウルメイト的なご縁の相です。穏やかな空気感の中で自然体でいられる相手が運命の人です。",
-                        "仕事や共通の目標を通じて尊敬し合える相手と結ばれるキャリア・パートナー相です。二人で協力することで一人では成し遂げられない大きな夢を形にできます。",
-                        "ユーモアと笑顔が絶えない明るい家庭を築ける幸運の相です。ちょっとしたハプニングも二人で笑い飛ばせるような、ポジティブで温かいパートナーに恵まれます。",
-                        "年月が経つほどに愛情がワインのように熟成していく、末広がりの幸せな結婚運です。小さな記念日や季節のイベントを一緒に楽しむことで絆が永遠のものになります。"
+                        "玉の輿・逆玉の輿の兆しがある華やかな結婚運です。経済的にも精神的にも豊かで頼りがいのあるパートナーと出会い、ワンランク上の充実した人生を共に歩めるでしょう。",
+                        "友人関係や仕事仲間から自然と恋愛・結婚へと発展する「親友のような夫婦」の相です。気取らず冗談を言い合えるフラットな関係が、長く続く幸せの秘訣になります。",
+                        "感情線に向かって上向きに伸びる結婚線の気配があり、お互いを高め合いながら成長できる理想的なパートナーシップを示しています。共通の目標を持つことで絆がさらに強固になります。",
+                        "年の差や育った環境の違いを超えて深く愛し合えるボーダーレスな良縁相です。新しい視点や刺激を与えてくれる相手と結ばれることで、あなたの世界が大きく広がります。",
+                        "一度結ばれたご縁を何十年も大切に育て上げる一途で誠実な結婚運です。穏やかで温かい家庭を築き、家族全員にとって一番安心できる居場所を作り上げることができます。",
+                        "直感とタイミングの良さに恵まれ、トントン拍子に話が進むスピード婚・運命婚のポテンシャルを秘めています。「この人だ」と感じたときの決断力が幸せの扉を開きます。",
+                        "お互いの自由と一人の時間も尊重し合える、洗練された大人の結婚運です。自立した二人だからこそ、一緒に過ごす時間がより深く濃密な愛情に満たされます。",
+                        "旅先や趣味の場、新しい学びのコミュニティなど、普段の生活圏から一歩外に出た場所に運命の出会いが待っています。好奇心を持って行動するほど良縁が近づきます。",
+                        "困ったときに真っ先に支えてくれる「戦友」のような頼もしいパートナーと結ばれる相です。どんな人生の波も二人で力を合わせて笑顔で乗り越えていける強さがあります。",
+                        "愛情表現が豊かで、いつまでも恋人同士のような新鮮さを保てるロマンチックな結婚運です。記念日や日々の「ありがとう」を大切にすることで愛が永遠に続きます。",
+                        "周囲の人々から祝福され、両家の縁や仲間との繋がりも温かく広がる恵まれた結婚運です。多くの人に愛され応援されながら、幸せな家庭を築いていけます。",
+                        "過去の恋愛の学びをすべて糧にして、本当に自分を大切にしてくれる相手を見極める審美眼が冴えわたっています。これから訪れるご縁は安心感と喜びに満ちた本物です。",
+                        "ユーモアと笑顔が絶えない明るい家庭を築く天性のムードメーカー相です。あなたの前向きなエネルギーがパートナーの運気も引き上げ、幸せの好循環が生まれます。",
+                        "静かな信頼と深い安心感で結ばれるソウルメイト的な良縁の気配があります。言葉にしなくても気持ちが通じ合うような、心の奥底で深く繋がれる相手と出会えるでしょう。",
+                        "自分の夢やライフワークを大切にしながら、それを心から応援してくれる理解者と結ばれる相です。妥協せず自分らしく輝くことが、最高のパートナーを引き寄せる鍵です。",
+                        "穏やかで優しい愛情の波が長く続く安定感抜群の結婚運です。日常のささやかな幸せを一緒に喜べるパートナーと出会い、心豊かな人生を歩んでいけます。"
                     ];
 
-                    // 開運アドバイス（36種類）
+                    // 開運アドバイス（54種類）
                     const advicesPool = [
                         "朝一番に深呼吸をして今日やりたいことを一つだけ決めると、持ち前の集中力がさらに高まり幸運を引き寄せます。",
                         "直感で「面白そう」と感じたことには迷わず挑戦してみてください。新しい場所への外出が運気アップの鍵になります。",
@@ -1350,7 +1656,25 @@
                         "美味しいものを味わって食べ、しっかり睡眠をとるという基本を大切にすることで、強運を受け止める器が広がります。",
                         "人の良いところを見つけて素直に褒めることで、あなた自身の魅力と人望が倍増し幸運の輪が広がります。",
                         "直感的に気になった場所やイベントには、スケジュールを調整してでも参加してみると運命的な出会いがあります。",
-                        "深呼吸とともに肩の力を抜いてリラックスすることで、最高のタイミングで最高のチャンスを掴み取れます。"
+                        "深呼吸とともに肩の力を抜いてリラックスすることで、最高のタイミングで最高のチャンスを掴み取れます。",
+                        "財布の中のレシートや使わないカードを整理すると、金運の通り道がスッキリ整い新しい豊かさが舞い込みます。",
+                        "普段選ばない色の服や小物を身につけてみると、眠っていた新しい魅力と出会いの運気が一気に引き出されます。",
+                        "朝コップ一杯のお水をゆっくり飲むことで、体内の気の流れがリセットされ直感力と集中力が研ぎ澄まされます。",
+                        "誰かの成功や幸せを心から一緒に喜ぶことで、同じ波長の大きな幸運があなたの元へも引き寄せられてきます。",
+                        "休日はデジタルデトックスの時間を少し作り、読書や手書きのメモを楽しむと創造性が驚くほど豊かになります。",
+                        "玄関のたたきをサッと水拭きして靴を揃えておくと、良い運気と嬉しいニュースが真っ先に飛び込んできます。",
+                        "「できるかどうか」より「やってみたいか」を基準に小さな一歩を踏み出すと、最高の追い風が吹き始めます。",
+                        "季節の花や旬のフルーツを食卓に取り入れることで、自然界の瑞々しいエネルギーがあなたの生命線を輝かせます。",
+                        "自分の長所や人から褒められた言葉をスマホのメモに記録しておくと、いざというときの強いお守りになります。",
+                        "少し早起きして静かな朝の時間を味わうことで、一日の主導権を握り思い通りの展開を作り出せます。",
+                        "憧れの人や尊敬する人の考え方・習慣を一つだけ真似してみると、運気のステージが急速に引き上がります。",
+                        "背筋をスッと伸ばして普段より少し大股で歩くことで、自信と陽のエネルギーが満ちてチャンスを引き寄せます。",
+                        "寝具や枕カバーを清潔で肌触りの良いものに整えると、睡眠中の運気チャージ効率が格段にアップします。",
+                        "困っている人や迷っている人に優しい一言をかけてあげると、天からの信頼貯金が貯まり大きな助けが返ってきます。",
+                        "頭の中で考えすぎているときは、紙に思考をすべて書き出すことで本質が見え、迷いがスッと晴れ渡ります。",
+                        "お気に入りの香り（アロマや香水、ハンドクリーム）を味方につけると、一瞬で気分が切り替わり良縁を招きます。",
+                        "過去の失敗や後悔を手放し「すべては今の成長のためにあった」と受け入れることで、未来への扉が大きく開きます。",
+                        "今日一日を精一杯生きた自分自身を夜寝る前に労ってあげることで、翌朝さらに強い幸運体質へと生まれ変わります。"
                     ];
 
                     // ラッキーカラー / アイテム（54種類）
@@ -1529,6 +1853,36 @@
             latestResultData = data;
             document.getElementById('result-engine-badge').textContent = data._usedGemini ? 'Gemini AI リアル鑑定完了' : '掌紋画像解析 鑑定完了';
             document.getElementById('result-catchphrase').textContent = `「${data.catchphrase}」`;
+
+            // 検出した実際のシワ（手相ライン）をサムネイル写真の上にハイライト描画して「どこを観て占ったか」を可視化
+            if (data._detectedLines && data._detectedLines.length > 0) {
+                const thumbEl = document.getElementById('captured-thumbnail');
+                const baseImg = new Image();
+                baseImg.onload = () => {
+                    const tc = document.createElement('canvas');
+                    tc.width = baseImg.width;
+                    tc.height = baseImg.height;
+                    const tctx = tc.getContext('2d');
+                    tctx.drawImage(baseImg, 0, 0);
+
+                    // 読み取った手相の溝をゴールド〜エメラルドの光るドットでオーバーレイ表示
+                    data._detectedLines.forEach(linePts => {
+                        linePts.forEach(pt => {
+                            const px = pt.x * tc.width;
+                            const py = pt.y * tc.height;
+                            // 上段＝感情線(ピンク)、中段＝頭脳線(ブルー)、下段＝生命線(グリーン)
+                            if (pt.y < 0.54) tctx.fillStyle = 'rgba(244, 114, 182, 0.78)';
+                            else if (pt.y < 0.66) tctx.fillStyle = 'rgba(96, 165, 250, 0.78)';
+                            else tctx.fillStyle = 'rgba(52, 211, 153, 0.78)';
+                            tctx.beginPath();
+                            tctx.arc(px, py, Math.max(2.2, tc.width * 0.0055), 0, Math.PI * 2);
+                            tctx.fill();
+                        });
+                    });
+                    thumbEl.src = tc.toDataURL('image/jpeg', 0.9);
+                };
+                baseImg.src = thumbEl.src;
+            }
             document.getElementById('result-overall').textContent = data.overall;
             document.getElementById('result-life').textContent = data.lifeLine;
             document.getElementById('result-head').textContent = data.headLine;
